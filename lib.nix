@@ -15,9 +15,6 @@ let
 
   beamPackages = pkgs.beam.packagesWith pkgs.beam.interpreters.erlang;
 
-  # elixir-desktop (LiveView desktop): npm for the JS wrapper,
-  # wxGTK32 brings the wxWebView runtime on Linux (erlang is
-  # built with --enable-wx using the same wxWidgets).
   dependencies = with pkgs; [
     wget
     git
@@ -30,10 +27,11 @@ let
   shell = pkgs.mkShell {
     buildInputs = elixirEnv ++ dependencies;
     shellHook = ''
-      alias run='mix run --no-halt' # boots the app; desktop window opens on Application.start
+      alias run='mix run --no-halt' 
       alias repl='iex -S mix'
       alias script='elixir ./lib/script.exs'
-      alias make='nix-build -A package && git add . && git commit -m '
+      alias make='rm result; nix-build'
+      alias test='./result/bin/tischlampe start'
       alias form='nixpkgs-fmt default.nix; mix format'
     '';
   };
