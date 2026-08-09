@@ -29,8 +29,12 @@ not needed**.
 
 ## Release
 
-    nix-build -A package
-    PHX_SERVER=true SECRET_KEY_BASE=<secret> ./result/bin/tischlampe start
+    make                 # nix-build -A package (in-shell alias: nix-build)
+    test                 # ./result/bin/tischlampe start
+
+No env vars needed: the release always starts the server and uses a fixed
+local secret (loopback-only + `Desktop.Auth`). `PORT` and `SECRET_KEY_BASE`
+are still honored if set.
 
 ## Desktop auth
 

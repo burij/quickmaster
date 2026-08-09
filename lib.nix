@@ -8,19 +8,19 @@ let
   appName = "tischlampe";
   appVersion = "0.1";
 
-  elixirEnv = with pkgs; [
-    elixir
-    erlang
-  ];
-
   beamPackages = pkgs.beam.packagesWith pkgs.beam.interpreters.erlang;
+
+  elixirEnv = [
+    beamPackages.elixir
+    beamPackages.erlang
+  ];
 
   dependencies = with pkgs; [
     wget
     git
     nixpkgs-fmt
     opencode
-    wxGTK32
+    wxwidgets_3_2 # wxWebView runtime used by elixir-desktop on Linux
     inotify-tools # phoenix_live_reload file watcher
   ];
 

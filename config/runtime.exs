@@ -7,19 +7,8 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
-# ## Using releases
-#
-# If you use `mix release`, you need to explicitly enable the server
-# by passing the PHX_SERVER=true when you start it:
-#
-#     PHX_SERVER=true bin/tischlampe start
-#
-# Alternatively, you can use `mix phx.gen.release` to generate a `bin/server`
-# script that automatically sets the env var above.
-if System.get_env("PHX_SERVER") do
-  config :tischlampe, TischlampeWeb.Endpoint, server: true
-end
-
+# elixir-desktop: the window loads the endpoint, so the server is
+# always enabled (no PHX_SERVER gate like a web deploy would need).
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :tischlampe, TischlampeWeb.Endpoint,
@@ -45,16 +34,16 @@ if config_env() == :prod do
   # variable instead.
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      raise """
-      environment variable SECRET_KEY_BASE is missing.
-      You can generate one by calling: mix phx.gen.secret
-      """
+      # local desktop app (loopback only + Desktop.Auth):
+      # fixed default is fine, no env vars needed at runtime
+      "tischlampe-local-default-secret-7f3c9a1e5d2b4f6a8c0e1b3d5f7a9c2e"
 
   port = String.to_integer(System.get_env("PORT", "4000"))
 
   config :tischlampe, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :tischlampe, TischlampeWeb.Endpoint,
+    server: true,
     # elixir-desktop: the window loads this local URL (desktop app, no TLS)
     url: [host: "localhost", port: port],
     http: [ip: {127, 0, 0, 1}, port: port],
