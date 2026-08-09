@@ -31,6 +31,8 @@ not needed**.
 
     make                 # nix-build -A package (in-shell alias: nix-build)
     test                 # ./result/bin/tischlampe start
+    new                  # scaffold a fresh phoenix project in the current
+                         # (empty) folder; names derive from the folder name
 
 No env vars needed: the release always starts the server and uses a fixed
 local secret (loopback-only + `Desktop.Auth`). `PORT` and `SECRET_KEY_BASE`

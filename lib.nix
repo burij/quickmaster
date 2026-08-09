@@ -33,12 +33,17 @@ let
       alias make='rm result; nix-build'
       alias test='./result/bin/tischlampe start'
       alias form='nixpkgs-fmt default.nix; mix format'
-      # @pi: why in this specific folder. i want it generic for the situation, that only this file exists, but we are working in an empty folder. should dependencies via mix not also should be installed?
+      # regenerates the phoenix boilerplate in the current (empty) folder;
+      # app/module names are derived from the folder name
       new() {
-        rm -rf /tmp/tischlampe
-        mix phx.new /tmp/tischlampe --app tischlampe \
-          --module Tischlampe --no-ecto --no-mailer \
-          --no-dashboard --no-assets
+        app=$(basename "$PWD" | tr '[:upper:]' '[:lower:]' |
+          sed 's/[^a-z0-9]//g; s/^[0-9]*//')
+        app=''${app:-app}
+        module=$(basename "$PWD" |
+          sed 's/[^A-Za-z0-9]//g; s/^[0-9]*//; s/^\([a-z]\)/\U\1/')
+        module=''${module:-App}
+        printf 'y\n' | mix phx.new . --app "$app" --module "$module" \
+          --no-ecto --no-mailer --no-dashboard --no-assets --install
       }
     '';
   };
