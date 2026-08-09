@@ -33,6 +33,13 @@ let
       alias make='rm result; nix-build'
       alias test='./result/bin/tischlampe start'
       alias form='nixpkgs-fmt default.nix; mix format'
+      # @pi: why in this specific folder. i want it generic for the situation, that only this file exists, but we are working in an empty folder. should dependencies via mix not also should be installed?
+      new() {
+        rm -rf /tmp/tischlampe
+        mix phx.new /tmp/tischlampe --app tischlampe \
+          --module Tischlampe --no-ecto --no-mailer \
+          --no-dashboard --no-assets
+      }
     '';
   };
 
