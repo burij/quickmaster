@@ -89,10 +89,28 @@ body {
   cursor: pointer;
 }
 
-.qm-loading {
-  margin-top: 16px;
-  color: var(--qm-amber);
-  font-family: var(--qm-mono);
+/* fixed-size spinner slot: keeps the button from shifting while busy */
+.qm-spinner-slot {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+}
+
+.qm-spinner {
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-top-color: var(--qm-amber);
+  animation: qm-spin 0.7s linear infinite;
+}
+
+@keyframes qm-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* layout */

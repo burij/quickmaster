@@ -64,7 +64,8 @@ that owns state:
 - `lib/quickmaster_web/live/home_live.ex` — the effect panel is the start
   screen: rotary knobs with numeric inputs, original + mastered waveforms
   (inline SVG), preview and render buttons, progress bar. The window is
-  sized 1160×700 so the whole panel fits without scrolling.
+  sized 1180×800 so the whole panel fits without scrolling.
+  Upload/decode progress is shown as a spinner left of `Open file…`.
 - `lib/quickmaster/file_dialog.ex` — native `wxFileDialog` save dialog used
   by `Session.render/0` to pick the target path.
 - Files are opened with the `Open file…` button (`<input type=file>`), which

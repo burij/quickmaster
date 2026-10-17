@@ -32,7 +32,9 @@ defmodule QuickmasterWeb.HomeLiveTest do
     assert {:ok, _} = preflight_upload(upload)
 
     # An unfinished entry used to crash the render (no :progress on the config).
-    assert render(view) =~ "Uploading"
+    html = render(view)
+    assert html =~ "qm-spinner"
+    refute html =~ "Uploading"
   end
 
   test "renders the compressor once a file is loaded", %{conn: conn} do

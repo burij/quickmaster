@@ -147,7 +147,7 @@ defmodule QuickmasterWeb.HomeLive do
         <div class="qm-panel qm-waves">
           <div class="qm-panel-title">Waveform</div>
           <div :if={@snap.file == nil} class="qm-empty">
-            No file loaded — open one via File → Open audio file…
+            No file loaded — use the Open file… button
           </div>
           <.wave label="Original" peaks={@orig} kind="orig" />
           <.wave label="Mastered" peaks={@master} kind="master" />
@@ -227,21 +227,21 @@ defmodule QuickmasterWeb.HomeLive do
           <span>{format_size(@snap.file.size)}</span>
         </div>
         <div :if={@snap.file == nil} class="qm-file-meta">
-          File → Open audio file… (the menu bar)
+          open a file to start
         </div>
       </div>
 
       <div class="qm-file-actions">
+        <!-- fixed-size slot so the button does not shift while busy -->
+        <div class="qm-spinner-slot">
+          <span :if={busy?(@uploads, @snap)} class="qm-spinner" aria-label="Working"></span>
+        </div>
         <form id="qm-upload" phx-change="validate" phx-submit="validate">
           <label class="qm-btn qm-btn-ghost" phx-drop-target={@uploads.audio.ref}>
             Open file…
             <.live_file_input upload={@uploads.audio} id="qm-input" class="qm-file-input" />
           </label>
         </form>
-        <div :if={upload_progress(@uploads.audio)} class="qm-loading">
-          Uploading… {upload_progress(@uploads.audio)}%
-        </div>
-        <div :if={@snap.status == :loading} class="qm-loading">Reading file…</div>
       </div>
     </div>
     """
@@ -347,6 +347,11 @@ defmodule QuickmasterWeb.HomeLive do
   defp point(i, n, w, y) do
     x = if n > 1, do: i / (n - 1) * w, else: 0.0
     "#{Float.round(x * 1.0, 2)},#{Float.round(y * 1.0, 2)}"
+  end
+
+  # Busy while an upload is running or the file is being decoded.
+  defp busy?(uploads, snap) do
+    upload_progress(uploads.audio) != nil or snap.status == :loading
   end
 
   # Aggregate upload progress; it lives on the entries, not on the config.
