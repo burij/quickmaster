@@ -112,7 +112,7 @@ defmodule QuickmasterWeb.HomeLive do
     <div class="qm-app">
       <header class="qm-header">
         <div class="qm-brand">
-          <span class="qm-logo">QM</span>
+          <img src={~p"/images/logo.svg"} alt="" class="qm-logo" width="34" height="34" />
           <span class="qm-title">Quickmaster</span>
         </div>
         <div class="qm-subtitle">fast audio mastering · Dyson compressor</div>

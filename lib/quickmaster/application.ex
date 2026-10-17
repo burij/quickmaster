@@ -32,6 +32,9 @@ defmodule Quickmaster.Application do
            app: :quickmaster,
            id: QuickmasterWindow,
            title: "Quickmaster",
+           # icon path is relative to priv/
+           icon: "static/images/icon.png",
+           taskbar_icon: "static/images/icon.png",
            # large enough to show the whole panel without scrolling
            size: {1180, 840},
            min_size: {1000, 720},

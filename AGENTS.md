@@ -95,6 +95,11 @@ the same position.
   `window.Phoenix.Socket` and defines the `Knob` hook (pointer drag +
   arrow keys). Plain JS, no build step.
 - `priv/static/assets/css/app.css` holds the outboard-compressor styling.
+- `priv/static/images/logo.svg` is the "QM" badge (used in the header and
+  as favicon); `priv/static/images/icon.png` (256px) is the window/taskbar
+  icon (`Desktop.Window` `icon:` path is relative to `priv/`), and
+  `priv/static/favicon.ico` is a 64px PNG. The PNGs are rendered from the
+  SVG with `inkscape --export-type=png -w … -h …`.
 
 ## Known limits
 
