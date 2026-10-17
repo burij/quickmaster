@@ -50,14 +50,31 @@ let
     '';
   };
 
-  package = beamPackages.mixRelease {
+  release = beamPackages.mixRelease {
     pname = appName;
     version = appVersion;
     src = ./.;
     removeCookie = false;
-    # runtime tools used by the audio pipeline
-    extraPkgs = with pkgs; [ ffmpeg-headless mpv wxwidgets_3_2 ];
   };
+
+  # The release binary is named after the OTP app (:tischlampe). Wrap it so
+  # the audio tools (and wxWidgets) are on PATH at runtime.
+  runtimePath = pkgs.lib.makeBinPath (
+    with pkgs; [
+      ffmpeg-headless
+      mpv
+      wxwidgets_3_2
+    ]
+  );
+
+  package = pkgs.runCommand appName
+    {
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+    } ''
+    mkdir -p $out/bin
+    makeWrapper ${release}/bin/tischlampe $out/bin/tischlampe \
+      --prefix PATH : ${runtimePath}
+  '';
 
 
 in

@@ -14,7 +14,7 @@ the product name is **Quickmaster**.
     run                  # mix run --no-halt; the wx window opens
     repl                 # iex -S mix
     test                 # mix test (skips audio tests if tools missing)
-    make                 # nix-build -A package && git add . && git commit -m
+    make                 # rm result; nix-build (release derivation)
     form                 # nixpkgs-fmt; mix format
 
 `ffmpeg`/`ffprobe` (decode/encode) and `mpv` (preview playback) come from
