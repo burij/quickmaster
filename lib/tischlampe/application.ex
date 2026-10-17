@@ -15,6 +15,7 @@ defmodule Tischlampe.Application do
         TischlampeWeb.Telemetry,
         {DNSCluster, query: Application.get_env(:tischlampe, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Tischlampe.PubSub},
+        Tischlampe.Session,
         TischlampeWeb.Endpoint
       ] ++ window()
 
