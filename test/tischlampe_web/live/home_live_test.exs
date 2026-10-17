@@ -49,6 +49,13 @@ defmodule TischlampeWeb.HomeLiveTest do
              "Peak limit"
 
     wait_until(fn -> Session.snapshot().params.peak_limit == -6.0 end)
+
+    # progress broadcasts drive the progress bar
+    send(view.pid, {:session, %{Session.snapshot() | status: :mastering, phase: :master}})
+    send(view.pid, {:progress, :master, 42.0})
+    html = render(view)
+    assert html =~ "Mastering"
+    assert html =~ "42"
   end
 
   defp wait_until(fun, timeout \\ 20_000) do

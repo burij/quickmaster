@@ -90,7 +90,7 @@ defmodule Tischlampe.Session do
 
   @impl true
   def handle_cast({:set_params, params}, state) do
-    state = %{state | params: params, error: nil}
+    state = stop_player(%{state | params: params, error: nil})
 
     # A run with the old parameters is pointless once they changed.
     state = if match?(%{kind: :master}, state.task), do: stop_task(state), else: state

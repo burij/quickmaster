@@ -89,6 +89,11 @@ defmodule TischlampeWeb.HomeLive do
   @impl true
   def handle_info({:session, snap}, socket), do: {:noreply, assign(socket, :snap, snap)}
 
+  def handle_info({:progress, phase, percent}, socket) do
+    snap = %{socket.assigns.snap | percent: percent, phase: phase}
+    {:noreply, assign(socket, :snap, snap)}
+  end
+
   def handle_info({:waveforms, orig, master}, socket) do
     socket = if orig, do: assign(socket, :orig, orig), else: socket
     socket = if master, do: assign(socket, :master, master), else: socket
