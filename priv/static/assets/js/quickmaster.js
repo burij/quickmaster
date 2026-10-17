@@ -10,8 +10,8 @@ const Knob = {
     this.step = parseFloat(this.el.dataset.step || "0.01");
     this.decimals = parseInt(this.el.dataset.decimals || "2", 10);
     this.value = parseFloat(this.el.dataset.value);
-    this.line = this.el.querySelector(".knob-indicator");
-    this.readout = this.el.querySelector(".knob-value");
+    this.line = this.el.querySelector(".qm-knob-indicator");
+    this.readout = this.el.querySelector(".qm-knob-value");
     this.render();
 
     this.el.addEventListener("pointerdown", (e) => this.start(e));

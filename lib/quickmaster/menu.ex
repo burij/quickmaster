@@ -11,12 +11,6 @@ defmodule Quickmaster.Menu do
 
   use Desktop.Menu
 
-  import Bitwise
-
-  # wxFD_OPEN | wxFD_FILE_MUST_EXIST
-  @dialog_style 1 ||| 16
-  @wildcard "Audio files|*.wav;*.mp3;*.flac;*.ogg;*.oga;*.opus;*.m4a;*.aac;*.aiff;*.aif|All files|*"
-
   @impl true
   def mount(menu), do: {:ok, menu}
 
@@ -50,25 +44,9 @@ defmodule Quickmaster.Menu do
   end
 
   defp open_dialog do
-    frame = Desktop.Window.frame(QuickmasterWindow)
-
-    dialog =
-      :wxFileDialog.new(frame,
-        message: "Open audio file",
-        wildCard: @wildcard,
-        style: @dialog_style
-      )
-
-    result = :wxFileDialog.showModal(dialog)
-    path = if result == 5100, do: List.to_string(:wxFileDialog.getPath(dialog)), else: nil
-    :wxFileDialog.destroy(dialog)
-
-    if path, do: Quickmaster.Session.load_file(path)
-    :ok
-  rescue
-    e ->
-      require Logger
-      Logger.error("native open dialog failed: #{inspect(e)}")
-      :ok
+    case Quickmaster.FileDialog.open() do
+      nil -> :ok
+      path -> Quickmaster.Session.load_file(path)
+    end
   end
 end

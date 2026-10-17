@@ -49,7 +49,7 @@ defmodule Quickmaster.SessionTest do
     assert snap.file.sample_rate == 44_100
     assert snap.params == Session.default_params()
 
-    Session.render()
+    Session.render_to(Path.join(dir, "tone_master.wav"))
     wait_until(fn -> Session.snapshot().output != nil end, 30_000)
 
     [output] = Path.wildcard(Path.join(dir, "tone_master.wav"))

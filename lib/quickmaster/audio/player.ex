@@ -13,12 +13,15 @@ defmodule Quickmaster.Audio.Player do
   @doc "Start playing `path` (optionally from `:start` seconds for `:duration`)."
   @spec play(Path.t(), keyword()) :: {:ok, port()} | {:error, term()}
   def play(path, opts \\ []) do
+    # :spawn_executable does not search PATH, so resolve the executable first.
+    exe = System.find_executable(mpv()) || mpv()
+
     args =
-      ["--no-video", "--really-quiet", "--force-window=no"] ++
-        option("-start", opts[:start]) ++
+      ["--no-video", "--force-window=no", "--really-quiet"] ++
+        option("--start", opts[:start]) ++
         option("--length", opts[:duration]) ++ [path]
 
-    {:ok, Port.open({:spawn_executable, mpv()}, [:binary, :exit_status, args: args])}
+    {:ok, Port.open({:spawn_executable, exe}, [:binary, :exit_status, args: args])}
   rescue
     e -> {:error, e}
   end

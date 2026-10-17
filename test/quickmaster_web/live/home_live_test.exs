@@ -11,11 +11,14 @@ defmodule QuickmasterWeb.HomeLiveTest do
     :ok
   end
 
-  test "renders the drop zone on an empty session", %{conn: conn} do
+  test "shows the effect UI on an empty session", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
 
     assert html =~ "Quickmaster"
-    assert html =~ "Open an audio file"
+    assert html =~ "Dyson compressor"
+    assert html =~ "Peak limit"
+    assert html =~ "No file loaded"
+    assert html =~ "qm-knob"
   end
 
   test "renders while an upload is in progress", %{conn: conn} do

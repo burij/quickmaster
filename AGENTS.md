@@ -29,9 +29,11 @@ processor, so channels are independent.
 - `lib/quickmaster/audio/dyson.ex` — pure-Elixir port of the SWH "Dyson
   compressor" (LADSPA id 1403), faithful to
   `ladspa/dyson_compress_1403.xml` including the `f_pow2` exponent
-  approximation. Matches the native plugin within ~2e-4. Parameters and
-  defaults match the LADSPA ports: `peak_limit` (dB, -30..0, 0.0),
-  `release_time` (s, 0..1, 0.0), `cfrate` (0..1, 0.5), `crate` (0..1, 0.5).
+  approximation. Matches the native plugin within ~2e-4. Parameters match
+  the LADSPA ports: `peak_limit` (dB, -30..0), `release_time` (s, 0..1),
+  `cfrate` (0..1), `crate` (0..1). Defaults are 0.0, **0.25**, 0.5, 0.5 —
+  the release-time default is raised above the plugin's nominal 0.0,
+  because 0.0 makes the release filter extrapolate.
 - `lib/quickmaster/audio/ffmpeg.ex` — probe/decode/encode via the ffmpeg
   executables. Decoding is raw f32le; encoding reuses the original
   container/codec and copies its metadata (`-map_metadata`).
@@ -52,19 +54,19 @@ that owns state:
 2. Mastering runs automatically in a task and is recomputed (debounced,
    400 ms) whenever parameters change, so **preview and render read the
    cached mastered PCM** and stay cheap.
-3. `preview/0` plays 30 s starting at 30 % of the file; `render/0` writes
-   `<name>_master.<ext>` into the output directory (default: `~/Music`,
-   then `~/Downloads`, else the temp dir; override with
-   `config :quickmaster, :output_dir`). Progress is broadcast on the
-   `"qm:session"` PubSub topic.
+3. `preview/0` plays 30 s starting at 30 % of the file through `mpv`.
+4. `render/0` asks for a target path with the native save dialog and writes
+   the original format/metadata there; `render_to/1` skips the dialog (menu
+   and tests). Progress is broadcast on the `"qm:session"` PubSub topic.
 
 ## UI
 
-- `lib/quickmaster_web/live/home_live.ex` — drop zone, rotary knobs with
-  numeric inputs, original + mastered waveforms (inline SVG), preview and
-  render buttons, progress bar.
-- `lib/quickmaster/menu.ex` — native menu bar. "Open audio file…" opens a
-  `wxFileDialog` and hands the path to `Session.load_file/1` (no upload).
+- `lib/quickmaster_web/live/home_live.ex` — the effect panel is the start
+  screen: rotary knobs with numeric inputs, original + mastered waveforms
+  (inline SVG), preview and render buttons, progress bar.
+- `lib/quickmaster/menu.ex` — native menu bar. "Open audio file…" uses the
+  native dialog and hands the path to `Session.load_file/1` (no upload).
+- `lib/quickmaster/file_dialog.ex` — `wxFileDialog` open/save wrappers.
 - `priv/static/assets/js/phoenix.js` (Phoenix `Socket`) and `app.js`
   (LiveView client) are pristine copies from the deps; `LiveSocket`
   throws without the `Socket` class, so both are required.

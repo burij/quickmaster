@@ -3,8 +3,9 @@
 A desktop audio-mastering app: Phoenix LiveView running in a native window
 via [elixir-desktop](https://github.com/elixir-desktop/desktop).
 
-Drop an audio file, tweak the Dyson compressor, listen to a 30-second
-preview and render a `_master` copy in the original format and metadata.
+Open an audio file via **File → Open audio file…**, tweak the Dyson
+compressor, listen to a 30-second preview and render a `_master` copy in
+the original format and metadata (you pick the target with a save dialog).
 
 ## Run
 

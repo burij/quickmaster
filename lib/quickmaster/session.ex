@@ -22,7 +22,9 @@ defmodule Quickmaster.Session do
   @preview_ratio 0.30
   @preview_seconds 30
 
-  @default_params %{peak_limit: 0.0, release_time: 0.0, cfrate: 0.5, crate: 0.5}
+  # release_time defaults to 0.25 s: the plugin's nominal 0.0 makes the
+  # release filter extrapolate and is not usable for mastering.
+  @default_params %{peak_limit: 0.0, release_time: 0.25, cfrate: 0.5, crate: 0.5}
 
   ## public API
 
@@ -45,7 +47,11 @@ defmodule Quickmaster.Session do
 
   def set_params(params), do: GenServer.cast(__MODULE__, {:set_params, params})
 
-  def render, do: GenServer.cast(__MODULE__, :render)
+  @doc "Render to a path chosen in the native save dialog."
+  def render, do: GenServer.cast(__MODULE__, {:render, :ask})
+
+  @doc "Render to an explicit path, skipping the dialog (menu and tests)."
+  def render_to(path), do: GenServer.cast(__MODULE__, {:render, path})
 
   def preview, do: GenServer.cast(__MODULE__, :preview)
 
@@ -74,12 +80,12 @@ defmodule Quickmaster.Session do
     File.mkdir_p!(dir)
     dest = Path.join(dir, "original" <> Path.extname(name))
     File.cp!(path, dest)
-    {:reply, :ok, start_input(state, dest, name)}
+    {:reply, :ok, start_input(state, dest, name, :upload)}
   end
 
   def handle_call({:load_file, path}, _from, state) do
     if File.regular?(path) do
-      {:reply, :ok, start_input(state, path, Path.basename(path))}
+      {:reply, :ok, start_input(state, path, Path.basename(path), :native)}
     else
       {:reply, {:error, :not_found}, state}
     end
@@ -96,9 +102,9 @@ defmodule Quickmaster.Session do
     {:noreply, schedule_advance(state)}
   end
 
-  def handle_cast(:render, state) do
+  def handle_cast({:render, path}, state) do
     if state.raw,
-      do: {:noreply, schedule_advance(%{state | pending: :render})},
+      do: {:noreply, schedule_advance(%{state | pending: {:render, path}})},
       else: {:noreply, state}
   end
 
@@ -156,8 +162,9 @@ defmodule Quickmaster.Session do
       state.pending == :preview ->
         run_preview(%{state | pending: nil})
 
-      state.pending == :render ->
-        start_task(%{state | pending: nil}, :render)
+      match?({:render, _}, state.pending) ->
+        {:render, path} = state.pending
+        run_render(%{state | pending: nil}, path)
 
       true ->
         state
@@ -284,24 +291,32 @@ defmodule Quickmaster.Session do
     end)
   end
 
-  defp start_task(%{task: nil} = state, :render) do
+  defp start_task(state, _kind), do: state
+
+  # `:ask` opens the native save dialog; an explicit path skips it.
+  defp run_render(state, :ask) do
+    case Quickmaster.FileDialog.save(default_output_path(state)) do
+      nil -> state
+      path -> start_render(state, path)
+    end
+  end
+
+  defp run_render(state, path), do: start_render(state, path)
+
+  defp start_render(state, out) do
+    File.mkdir_p!(Path.dirname(out))
     state = %{state | status: :mastering, phase: :encode, percent: 0.0}
     broadcast_session(state)
 
     info = state.info
     input = state.input
     mastered = state.mastered
-    name = input.name
-    out = Path.join(output_dir(), Path.rootname(name) <> "_master" <> Path.extname(name))
-    File.mkdir_p!(output_dir())
 
     run_task(state, :render, fn _progress ->
       FFmpeg.encode(mastered, info.sample_rate, info.channels, input.path, out)
       {:ok, out}
     end)
   end
-
-  defp start_task(state, _kind), do: state
 
   defp run_task(state, kind, fun) do
     parent = self()
@@ -349,7 +364,7 @@ defmodule Quickmaster.Session do
   ## helpers
 
   # A newly selected file starts from the plugin defaults again.
-  defp start_input(state, path, name) do
+  defp start_input(state, path, name, origin) do
     _ = state |> stop_task() |> stop_player()
 
     dir = work_dir()
@@ -360,7 +375,7 @@ defmodule Quickmaster.Session do
       |> Map.merge(%{
         status: :loading,
         work_dir: dir,
-        input: %{path: path, name: name, size: File.stat!(path).size}
+        input: %{path: path, name: name, size: File.stat!(path).size, origin: origin}
       })
 
     broadcast_session(state)
@@ -431,6 +446,20 @@ defmodule Quickmaster.Session do
 
   defp work_dir,
     do: Path.join(System.tmp_dir!(), "quickmaster/#{System.unique_integer([:positive])}")
+
+  # Suggested save path: next to the opened file, or in the output dir for
+  # uploads (where the original directory is unknown).
+  defp default_output_path(state) do
+    name = state.input.name
+
+    dir =
+      case state.input do
+        %{origin: :native, path: path} -> Path.dirname(path)
+        _ -> output_dir()
+      end
+
+    Path.join(dir, Path.rootname(name) <> "_master" <> Path.extname(name))
+  end
 
   defp output_dir do
     Application.get_env(:quickmaster, :output_dir) || default_output_dir()

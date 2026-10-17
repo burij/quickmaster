@@ -121,23 +121,8 @@ defmodule QuickmasterWeb.HomeLive do
         ffmpeg was not found on PATH. Install it (the project shell provides it) and restart.
       </div>
 
-      <div :if={@snap.file == nil} class="qm-dropzone">
-        <form id="qm-upload" phx-change="validate" phx-submit="validate">
-          <label class="qm-drop" phx-drop-target={@uploads.audio.ref}>
-            <div class="qm-drop-icon">♪</div>
-            <div class="qm-drop-main">Open an audio file</div>
-            <div class="qm-drop-sub">click to choose · or File → Open audio file…</div>
-            <.live_file_input upload={@uploads.audio} id="qm-input-drop" class="qm-file-input" />
-          </label>
-        </form>
-        <div :if={upload_progress(@uploads.audio)} class="qm-loading">
-          Uploading… {upload_progress(@uploads.audio)}%
-        </div>
-        <div :if={@snap.status == :loading} class="qm-loading">Reading file…</div>
-      </div>
-
-      <div :if={@snap.file != nil} class="qm-main">
-        <.file_panel snap={@snap} />
+      <div class="qm-main">
+        <.file_panel snap={@snap} uploads={@uploads} />
 
         <div class="qm-panel qm-controls">
           <div class="qm-panel-title">Dyson compressor</div>
@@ -161,6 +146,9 @@ defmodule QuickmasterWeb.HomeLive do
 
         <div class="qm-panel qm-waves">
           <div class="qm-panel-title">Waveform</div>
+          <div :if={@snap.file == nil} class="qm-empty">
+            No file loaded — open one via File → Open audio file…
+          </div>
           <.wave label="Original" peaks={@orig} kind="orig" />
           <.wave label="Mastered" peaks={@master} kind="master" />
         </div>
@@ -186,7 +174,7 @@ defmodule QuickmasterWeb.HomeLive do
               type="button"
               class="qm-btn qm-btn-primary"
               phx-click="preview"
-              disabled={@snap.status == :loading}
+              disabled={@snap.file == nil or @snap.status == :loading}
             >
               ▶ Preview 30 s
             </button>
@@ -202,16 +190,10 @@ defmodule QuickmasterWeb.HomeLive do
               type="button"
               class="qm-btn qm-btn-render"
               phx-click="render"
-              disabled={@snap.status == :loading}
+              disabled={@snap.file == nil or @snap.status == :loading}
             >
-              ⬇ Render master
+              ⬇ Render master…
             </button>
-            <form id="qm-upload2" phx-change="validate" phx-submit="validate">
-              <label class="qm-btn qm-btn-ghost" phx-drop-target={@uploads.audio.ref}>
-                Load another file
-                <.live_file_input upload={@uploads.audio} id="qm-input-more" class="qm-file-input" />
-              </label>
-            </form>
           </div>
 
           <div :if={@snap.output} class="qm-output">
@@ -227,16 +209,39 @@ defmodule QuickmasterWeb.HomeLive do
   ## components
 
   attr :snap, :map, required: true
+  attr :uploads, :map, required: true
 
   defp file_panel(assigns) do
     ~H"""
     <div class="qm-panel qm-file">
-      <div class="qm-file-name" title={@snap.file.name}>{@snap.file.name}</div>
-      <div class="qm-file-meta">
-        <span>{format_duration(@snap.file.duration)}</span>
-        <span>{@snap.file.channels} ch</span>
-        <span>{@snap.file.sample_rate} Hz</span>
-        <span>{format_size(@snap.file.size)}</span>
+      <div class="qm-file-info">
+        <div :if={@snap.file} class="qm-file-name" title={@snap.file.name}>
+          {@snap.file.name}
+        </div>
+        <div :if={@snap.file == nil} class="qm-file-name qm-dim">No file loaded</div>
+
+        <div :if={@snap.file} class="qm-file-meta">
+          <span>{format_duration(@snap.file.duration)}</span>
+          <span>{@snap.file.channels} ch</span>
+          <span>{@snap.file.sample_rate} Hz</span>
+          <span>{format_size(@snap.file.size)}</span>
+        </div>
+        <div :if={@snap.file == nil} class="qm-file-meta">
+          File → Open audio file… (the menu bar)
+        </div>
+      </div>
+
+      <div class="qm-file-actions">
+        <form id="qm-upload" phx-change="validate" phx-submit="validate">
+          <label class="qm-btn qm-btn-ghost" phx-drop-target={@uploads.audio.ref}>
+            Open file…
+            <.live_file_input upload={@uploads.audio} id="qm-input" class="qm-file-input" />
+          </label>
+        </form>
+        <div :if={upload_progress(@uploads.audio)} class="qm-loading">
+          Uploading… {upload_progress(@uploads.audio)}%
+        </div>
+        <div :if={@snap.status == :loading} class="qm-loading">Reading file…</div>
       </div>
     </div>
     """
