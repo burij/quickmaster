@@ -37,7 +37,9 @@ processor, so channels are independent.
 - `lib/quickmaster/audio/ffmpeg.ex` — probe/decode/encode via the ffmpeg
   executables. Decoding is raw f32le; encoding reuses the original
   container/codec and copies its metadata (`-map_metadata`).
-- `lib/quickmaster/audio/waveform.ex` — peak envelopes with Nx.
+- `lib/quickmaster/audio/waveform.ex` — peak envelopes via a direct
+  binary pass. Nx was dropped: its pure-Elixir backend cost ~8 µs per
+  element and made long files take minutes.
 - `lib/quickmaster/audio/master.ex` — streams a raw f32le file through one
   `Dyson` instance per channel, reporting progress per chunk; also writes
   the preview WAV slice.
@@ -99,7 +101,7 @@ the same position.
 - The pure-Elixir DSP runs at roughly 100 k samples/s; a few minutes of
   stereo audio take on the order of a minute to master. It runs in the
   background with progress. Speeding this up would mean a NIF (the
-  reference C is in `ladspa/`) or a rewrite in Nx.
+  reference C is in `ladspa/`) or EXLA would speed it up.
 - Membrane is intentionally not used: this is offline batch processing,
   so its streaming plugins would only add dependencies over plain file IO.
 - `nix-build` produces `result/bin/quickmaster`; it is wrapped so

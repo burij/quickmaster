@@ -2,10 +2,12 @@ defmodule Quickmaster.Audio.Waveform do
   @moduledoc """
   Peak envelopes for drawing waveforms.
 
-  Reads a raw f32le PCM file in bucket-sized windows (so memory stays
-  bounded for arbitrarily large files) and uses Nx to reduce each window
-  to `{min, max}` per channel.
+  One bucket-sized read and one binary pass per channel. Deliberately not
+  Nx: Nx's pure-Elixir backend costs ~8 µs per element, roughly 50x slower
+  than this direct loop, which made long files feel stuck.
   """
+
+  @big 1.0e38
 
   @doc """
   Return `[[{min, max}, ...], ...]`, one list of `buckets` values per channel.
@@ -25,32 +27,50 @@ defmodule Quickmaster.Audio.Waveform do
 
     try do
       for ch <- 0..(channels - 1) do
-        for b <- 0..(buckets - 1) do
-          first = from + b * bucket_frames
-          bucket(fd, first, bucket_frames, frames - b * bucket_frames, channels, ch)
-        end
+        channel(fd, from, frames, bucket_frames, channels, ch, buckets)
       end
     after
       :file.close(fd)
     end
   end
 
-  defp bucket(fd, first, bucket_frames, remaining, channels, ch) do
-    n = min(bucket_frames, remaining)
+  defp channel(fd, from, frames, bf, channels, ch, buckets) do
+    # bytes to skip at the start of every frame to land on this channel
+    skip = ch * 4
+    collect(fd, from, frames, bf, channels, skip, 0, buckets, [])
+  end
 
-    if n <= 0 do
-      {0.0, 0.0}
-    else
-      bytes = n * channels * 4
-      offset = first * channels * 4
-      {:ok, bin} = :file.pread(fd, offset, bytes)
+  defp collect(_fd, _from, _frames, _bf, _channels, _skip, b, buckets, acc)
+       when b >= buckets do
+    Enum.reverse(acc)
+  end
 
-      t =
-        Nx.from_binary(bin, :f32)
-        |> Nx.reshape({n, channels})
-        |> Nx.slice_along_axis(ch, 1, axis: 1)
+  defp collect(fd, from, frames, bf, channels, skip, b, buckets, acc) do
+    n = min(bf, frames - b * bf)
 
-      {Nx.to_number(Nx.reduce_min(t)), Nx.to_number(Nx.reduce_max(t))}
+    pair =
+      if n <= 0 do
+        {0.0, 0.0}
+      else
+        offset = (from + b * bf) * channels * 4
+        {:ok, bin} = :file.pread(fd, offset, n * channels * 4)
+        scan(bin, skip, @big, -@big)
+      end
+
+    collect(fd, from, frames, bf, channels, skip, b + 1, buckets, [pair | acc])
+  end
+
+  # A `case` (not a head pattern) so `skip` is already bound for binary-size.
+  # `if` instead of `min/2`/`max/2`: the BIFs are noticeably slower here.
+  defp scan(bin, skip, lo, hi) do
+    case bin do
+      <<_::binary-size(skip), x::float-little-32, rest::binary>> ->
+        lo = if x < lo, do: x, else: lo
+        hi = if x > hi, do: x, else: hi
+        scan(rest, skip, lo, hi)
+
+      _ ->
+        {lo, hi}
     end
   end
 end

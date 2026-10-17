@@ -164,8 +164,15 @@ defmodule Quickmaster.Audio.FFmpeg do
     e in ErlangError -> {:error, e}
   end
 
-  defp ffmpeg, do: Application.get_env(:quickmaster, :ffmpeg, "ffmpeg")
-  defp ffprobe, do: Application.get_env(:quickmaster, :ffprobe, "ffprobe")
+  # An explicit nil in the config must not crash the decoder, so fall back to
+  # a PATH lookup and finally to the bare name.
+  defp ffmpeg,
+    do: Application.get_env(:quickmaster, :ffmpeg) || System.find_executable("ffmpeg") || "ffmpeg"
+
+  defp ffprobe,
+    do:
+      Application.get_env(:quickmaster, :ffprobe) || System.find_executable("ffprobe") ||
+        "ffprobe"
 
   defp to_int(nil), do: nil
   defp to_int(v) when is_integer(v), do: v

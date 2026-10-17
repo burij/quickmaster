@@ -45,7 +45,6 @@ defmodule Quickmaster.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},
       {:desktop, github: "elixir-desktop/desktop"},
-      {:nx, "~> 0.10"},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:telemetry_metrics, "~> 1.0"},
       {:telemetry_poller, "~> 1.0"},
