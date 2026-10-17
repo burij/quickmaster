@@ -11,7 +11,7 @@ import Config
 # always enabled (no PHX_SERVER gate like a web deploy would need).
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
-  config :tischlampe, TischlampeWeb.Endpoint,
+  config :quickmaster, QuickmasterWeb.Endpoint,
     live_reload: [
       web_console_logger: true,
       patterns: [
@@ -20,8 +20,8 @@ if config_env() == :dev do
         # Gettext translations
         ~r"priv/gettext/.*\.po$",
         # Router, Controllers, LiveViews and LiveComponents
-        ~r"lib/tischlampe_web/router\.ex$",
-        ~r"lib/tischlampe_web/(controllers|live|components)/.*\.(ex|heex)$"
+        ~r"lib/quickmaster_web/router\.ex$",
+        ~r"lib/quickmaster_web/(controllers|live|components)/.*\.(ex|heex)$"
       ]
     ]
 end
@@ -36,13 +36,13 @@ if config_env() == :prod do
   # fixed default is fine, no env vars needed at runtime
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      "tischlampe-local-default-secret-7f3c9a1e5d2b4f6a8c0e1b3d5f7a9c2e"
+      "quickmaster-local-default-secret-7f3c9a1e5d2b4f6a8c0e1b3d5f7a9c2e"
 
   port = String.to_integer(System.get_env("PORT", "4000"))
 
-  config :tischlampe, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :quickmaster, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
-  config :tischlampe, TischlampeWeb.Endpoint,
+  config :quickmaster, QuickmasterWeb.Endpoint,
     server: true,
     # elixir-desktop: the window loads this local URL (desktop app, no TLS)
     url: [host: "localhost", port: port],
@@ -54,7 +54,7 @@ if config_env() == :prod do
   # To get SSL working, you will need to add the `https` key
   # to your endpoint configuration:
   #
-  #     config :tischlampe, TischlampeWeb.Endpoint,
+  #     config :quickmaster, QuickmasterWeb.Endpoint,
   #       https: [
   #         ...,
   #         port: 443,
@@ -76,7 +76,7 @@ if config_env() == :prod do
   # We also recommend setting `force_ssl` in your config/prod.exs,
   # ensuring no data is ever sent via http, always redirecting to https:
   #
-  #     config :tischlampe, TischlampeWeb.Endpoint,
+  #     config :quickmaster, QuickmasterWeb.Endpoint,
   #       force_ssl: [hsts: true]
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.

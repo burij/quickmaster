@@ -1,5 +1,5 @@
-ffmpeg? = Tischlampe.Audio.FFmpeg.available?()
-mmpeg? = Tischlampe.Audio.Player.available?()
+ffmpeg? = Quickmaster.Audio.FFmpeg.available?()
+mmpeg? = Quickmaster.Audio.Player.available?()
 
 exclude =
   if(ffmpeg?, do: [], else: [:ffmpeg]) ++

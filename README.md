@@ -1,18 +1,27 @@
-# Tischlampe
+# Quickmaster
 
-To start your Phoenix server:
+A desktop audio-mastering app: Phoenix LiveView running in a native window
+via [elixir-desktop](https://github.com/elixir-desktop/desktop).
 
-* Run `mix setup` to install and setup dependencies
-* Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+Drop an audio file, tweak the Dyson compressor, listen to a 30-second
+preview and render a `_master` copy in the original format and metadata.
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+## Run
 
-Ready to run in production? Please [check our deployment guides](https://phoenix.hexdocs.pm/deployment.html).
+```sh
+nix-shell            # provides elixir, wxGTK32, ffmpeg, mpv, ...
+run                  # mix run --no-halt — the window opens
+```
 
-## Learn more
+`test` runs the ExUnit suite. `make` builds the Nix release
+(`result/bin/quickmaster`).
 
-* Official website: https://www.phoenixframework.org/
-* Guides: https://phoenix.hexdocs.pm/overview.html
-* Docs: https://phoenix.hexdocs.pm
-* Forum: https://elixirforum.com/c/phoenix-forum
-* Source: https://github.com/phoenixframework/phoenix
+## How it works
+
+- The compressor is a pure-Elixir port of the SWH "Dyson compressor"
+  (LADSPA id 1403), verified against the native plugin.
+- `ffmpeg` decodes and encodes every format; `mpv` plays the preview.
+- The master is computed in the background whenever settings change, so
+  preview and render are instant.
+
+See `AGENTS.md` for the project layout and known limits.

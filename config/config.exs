@@ -7,18 +7,18 @@
 # General application configuration
 import Config
 
-config :tischlampe,
+config :quickmaster,
   generators: [timestamp_type: :utc_datetime]
 
 # Configure the endpoint
-config :tischlampe, TischlampeWeb.Endpoint,
+config :quickmaster, QuickmasterWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: TischlampeWeb.ErrorHTML, json: TischlampeWeb.ErrorJSON],
+    formats: [html: QuickmasterWeb.ErrorHTML, json: QuickmasterWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Tischlampe.PubSub,
+  pubsub_server: Quickmaster.PubSub,
   live_view: [signing_salt: "6hLTHgIH"]
 
 # Configure LiveView

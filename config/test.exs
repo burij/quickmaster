@@ -2,7 +2,7 @@ import Config
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
-config :tischlampe, TischlampeWeb.Endpoint,
+config :quickmaster, QuickmasterWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "1EXUHFi6OomGOnfRN4ireK6oRyh+ga7Vo3/SdojOPCIhvE3uIGUUMWMnqPGy+Dvr",
   server: false
@@ -11,7 +11,7 @@ config :tischlampe, TischlampeWeb.Endpoint,
 config :logger, level: :warning
 
 # Resolve external audio tools at boot so tests can find them on PATH.
-config :tischlampe,
+config :quickmaster,
   ffmpeg: System.find_executable("ffmpeg") || "ffmpeg",
   ffprobe: System.find_executable("ffprobe") || "ffprobe",
   mpv: System.find_executable("mpv") || "mpv"

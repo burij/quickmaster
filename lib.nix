@@ -57,7 +57,7 @@ let
     removeCookie = false;
   };
 
-  # The release binary is named after the OTP app (:tischlampe). Wrap it so
+  # The release binary is named after the OTP app (:quickmaster). Wrap it so
   # the audio tools (and wxWidgets) are on PATH at runtime.
   runtimePath = pkgs.lib.makeBinPath (
     with pkgs; [
@@ -72,7 +72,7 @@ let
       nativeBuildInputs = [ pkgs.makeWrapper ];
     } ''
     mkdir -p $out/bin
-    makeWrapper ${release}/bin/tischlampe $out/bin/tischlampe \
+    makeWrapper ${release}/bin/quickmaster $out/bin/quickmaster \
       --prefix PATH : ${runtimePath}
   '';
 

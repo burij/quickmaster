@@ -1,5 +1,6 @@
 # --- Elixir / Phoenix / Mix ---
 /_build/
+/testfiles/
 /deps/
 /doc/
 /cover/
@@ -7,7 +8,7 @@
 erl_crash.dump
 *.ez
 /tmp/
-/tischlampe-*.tar
+/quickmaster-*.tar
 /.elixir_ls/
 
 # --- Nix ---

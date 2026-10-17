@@ -95,7 +95,9 @@ const Knob = {
 
 window.addEventListener("DOMContentLoaded", () => {
   const csrf = document.querySelector("meta[name='csrf-token']").getAttribute("content");
-  new window.LiveView.LiveSocket("/live", {
+  // LiveSocket requires a Phoenix Socket class as its second argument;
+  // passing an options object throws and leaves the page unconnected.
+  new window.LiveView.LiveSocket("/live", window.Phoenix.Socket, {
     hooks: { Knob: Knob },
     params: { _csrf_token: csrf }
   }).connect();

@@ -1,9 +1,9 @@
-defmodule Tischlampe.MixProject do
+defmodule Quickmaster.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :tischlampe,
+      app: :quickmaster,
       version: "0.1.0",
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -20,7 +20,7 @@ defmodule Tischlampe.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {Tischlampe.Application, []},
+      mod: {Quickmaster.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
