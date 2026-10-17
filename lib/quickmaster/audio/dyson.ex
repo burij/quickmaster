@@ -8,12 +8,15 @@ defmodule Quickmaster.Audio.Dyson do
   including the `f_pow2` exponent approximation, so output matches the
   native plugin.
 
-  Parameters and defaults match the LADSPA ports:
+  Parameters and their nominal LADSPA defaults:
 
     * `peak_limit`  — dB, `-30..0`,  default `0.0`
     * `release_time`— seconds, `0..1`, default `0.0`
     * `cfrate`      — fast compression ratio, `0..1`, default `0.5`
     * `crate`       — compression ratio, `0..1`, default `0.5`
+
+  The app ships `release_time` as **0.25** (see `Quickmaster.Session`),
+  because the nominal 0.0 makes the release filter extrapolate.
 
   State is a plain struct; the two filter chains (`rlevelsqn`, `rlevelsqe`)
   are fixed-size tuples and their scans are unrolled, which keeps the hot

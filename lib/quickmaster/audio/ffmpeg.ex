@@ -2,13 +2,13 @@ defmodule Quickmaster.Audio.FFmpeg do
   @moduledoc """
   Decode and encode audio with the `ffmpeg`/`ffprobe` executables.
 
-  Decoding always produces raw little-endian float32 PCM, one channel after
-  another (planar by convention: channel data is split by the caller).
-  Encoding writes the original file's format and metadata back, so the
-  master keeps everything except the audio samples.
+  Decoding produces interleaved raw little-endian float32 PCM. Encoding
+  writes the original file's format and metadata back, so the master keeps
+  everything except the audio samples.
 
   The executable names can be overridden with
-  `config :quickmaster, ffmpeg: "/path/to/ffmpeg"` (and `:ffprobe`).
+  `config :quickmaster, ffmpeg: "/path/to/ffmpeg"` (and `:ffprobe`); a
+  missing value falls back to a `PATH` lookup.
   """
 
   @type info :: %{

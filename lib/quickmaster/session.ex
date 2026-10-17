@@ -2,14 +2,14 @@ defmodule Quickmaster.Session do
   @moduledoc """
   Owns the mastering workflow for the desktop app.
 
-  Holds the dropped file, its decoded raw PCM, the mastered raw PCM and the
-  waveforms; runs decode/master/encode in supervised tasks and broadcasts
-  progress and results on a PubSub topic.
+  Holds the opened file, the decoded PCM, the masters and the waveforms, and
+  runs the work as a sequence of background tasks: decode preview → decode
+  full → master preview → master full. A single `advance/1` step decides what
+  happens next, which keeps the concurrent cases (parameter change during
+  mastering, preview while mastering, ...) simple.
 
-  Mastering is recomputed in the background whenever parameters change, so
-  preview and render only need to read the cached mastered PCM. A single
-  `advance/1` step decides what to do next, which keeps the concurrent cases
-  (parameter change during mastering, preview while mastering, ...) simple.
+  Broadcasts on the `"qm:session"` PubSub topic. `AGENTS.md` documents the
+  phase order, the state fields and the public API.
   """
 
   use GenServer

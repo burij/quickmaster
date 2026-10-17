@@ -1,7 +1,7 @@
 defmodule QuickmasterWeb.HomeLive do
   @moduledoc """
-  Quickmaster home screen: drop an audio file, tweak the Dyson compressor,
-  listen to a preview and render a `_master` copy.
+  Quickmaster home screen: open an audio file, tweak the Dyson compressor,
+  A/B the 30 s previews and save a `_master` copy.
   """
 
   use QuickmasterWeb, :live_view
