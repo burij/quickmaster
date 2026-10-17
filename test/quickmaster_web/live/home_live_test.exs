@@ -18,6 +18,20 @@ defmodule QuickmasterWeb.HomeLiveTest do
     assert html =~ "Drop an audio file here"
   end
 
+  test "renders while an upload is in progress", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
+
+    upload =
+      file_input(view, "#qm-upload", :audio, [
+        %{name: "x.wav", content: "data", type: "audio/wav"}
+      ])
+
+    assert {:ok, _} = preflight_upload(upload)
+
+    # An unfinished entry used to crash the render (no :progress on the config).
+    assert render(view) =~ "Uploading"
+  end
+
   test "renders the compressor once a file is loaded", %{conn: conn} do
     dir = Path.join(System.tmp_dir!(), "qm_live_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

@@ -344,10 +344,15 @@ defmodule QuickmasterWeb.HomeLive do
     "#{Float.round(x * 1.0, 2)},#{Float.round(y * 1.0, 2)}"
   end
 
-  defp upload_progress(upload) do
-    if upload.entries == [] or Enum.all?(upload.entries, & &1.done?),
-      do: nil,
-      else: upload.progress
+  # Aggregate upload progress; it lives on the entries, not on the config.
+  defp upload_progress(%{entries: []}), do: nil
+
+  defp upload_progress(%{entries: entries}) do
+    if Enum.all?(entries, & &1.done?) do
+      nil
+    else
+      div(Enum.sum(Enum.map(entries, & &1.progress)), length(entries))
+    end
   end
 
   defp param_defs, do: @params
