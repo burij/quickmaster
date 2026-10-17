@@ -31,6 +31,7 @@ defmodule Quickmaster.Application do
          [
            app: :quickmaster,
            id: QuickmasterWindow,
+           menubar: Quickmaster.Menu,
            url: &QuickmasterWeb.Endpoint.url/0
          ]}
       ]

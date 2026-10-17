@@ -40,6 +40,9 @@ defmodule Quickmaster.Session do
   @doc "Load `path` (uploaded temp file) under its original `name`."
   def load(path, name), do: GenServer.call(__MODULE__, {:load, path, name}, 120_000)
 
+  @doc "Load a file from a native path, without copying it."
+  def load_file(path), do: GenServer.call(__MODULE__, {:load_file, path}, 120_000)
+
   def set_params(params), do: GenServer.cast(__MODULE__, {:set_params, params})
 
   def render, do: GenServer.cast(__MODULE__, :render)
@@ -67,25 +70,19 @@ defmodule Quickmaster.Session do
   end
 
   def handle_call({:load, path, name}, _from, state) do
-    stop_task(state)
-    stop_player(state)
-
     dir = work_dir()
     File.mkdir_p!(dir)
     dest = Path.join(dir, "original" <> Path.extname(name))
     File.cp!(path, dest)
+    {:reply, :ok, start_input(state, dest, name)}
+  end
 
-    # A newly dropped file starts from the plugin defaults again.
-    state =
-      blank(%{params: @default_params})
-      |> Map.merge(%{
-        status: :loading,
-        work_dir: dir,
-        input: %{path: dest, name: name, size: File.stat!(dest).size}
-      })
-
-    broadcast_session(state)
-    {:reply, :ok, start_task(state, :decode)}
+  def handle_call({:load_file, path}, _from, state) do
+    if File.regular?(path) do
+      {:reply, :ok, start_input(state, path, Path.basename(path))}
+    else
+      {:reply, {:error, :not_found}, state}
+    end
   end
 
   @impl true
@@ -350,6 +347,25 @@ defmodule Quickmaster.Session do
   end
 
   ## helpers
+
+  # A newly selected file starts from the plugin defaults again.
+  defp start_input(state, path, name) do
+    _ = state |> stop_task() |> stop_player()
+
+    dir = work_dir()
+    File.mkdir_p!(dir)
+
+    state =
+      blank(%{params: @default_params})
+      |> Map.merge(%{
+        status: :loading,
+        work_dir: dir,
+        input: %{path: path, name: name, size: File.stat!(path).size}
+      })
+
+    broadcast_session(state)
+    start_task(state, :decode)
+  end
 
   defp blank(state) do
     %{

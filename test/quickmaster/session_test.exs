@@ -59,6 +59,20 @@ defmodule Quickmaster.SessionTest do
     assert info.tags["title"] == "T"
   end
 
+  test "load_file uses a native path without copying", %{input: input} do
+    assert :ok = Session.load_file(input)
+    wait_until(fn -> Session.snapshot().status == :ready end)
+
+    snap = Session.snapshot()
+    assert snap.file.name == "tone.wav"
+    assert snap.file.size == File.stat!(input).size
+    wait_until(fn -> not Session.snapshot().stale end)
+  end
+
+  test "load_file rejects a missing path" do
+    assert {:error, :not_found} = Session.load_file("/does/not/exist.wav")
+  end
+
   test "changing parameters marks the master stale and recomputes it", %{input: input} do
     assert :ok = Session.load(input, "stale.wav")
     wait_until(fn -> Session.snapshot().status == :ready end)

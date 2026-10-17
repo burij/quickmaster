@@ -15,7 +15,7 @@ defmodule QuickmasterWeb.HomeLiveTest do
     {:ok, _view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
 
     assert html =~ "Quickmaster"
-    assert html =~ "Drop an audio file here"
+    assert html =~ "Open an audio file"
   end
 
   test "renders while an upload is in progress", %{conn: conn} do

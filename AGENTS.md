@@ -63,6 +63,8 @@ that owns state:
 - `lib/quickmaster_web/live/home_live.ex` — drop zone, rotary knobs with
   numeric inputs, original + mastered waveforms (inline SVG), preview and
   render buttons, progress bar.
+- `lib/quickmaster/menu.ex` — native menu bar. "Open audio file…" opens a
+  `wxFileDialog` and hands the path to `Session.load_file/1` (no upload).
 - `priv/static/assets/js/phoenix.js` (Phoenix `Socket`) and `app.js`
   (LiveView client) are pristine copies from the deps; `LiveSocket`
   throws without the `Socket` class, so both are required.
@@ -81,3 +83,8 @@ that owns state:
   so its streaming plugins would only add dependencies over plain file IO.
 - `nix-build` produces `result/bin/quickmaster`; it is wrapped so
   `ffmpeg`, `mpv` and wxWidgets are on `PATH` at runtime.
+- HTML5 drag and drop does not reach the page in wxWebView on Linux: the
+  GTK widget is a drop destination and swallows the drag before WebKit
+  delivers it. Erlang's wx bindings expose no drop target, so this cannot
+  be fixed from Elixir. Use the native menu (File → Open audio file…) or
+  click the drop zone, which opens the same native file chooser.

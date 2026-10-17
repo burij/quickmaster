@@ -125,8 +125,8 @@ defmodule QuickmasterWeb.HomeLive do
         <form id="qm-upload" phx-change="validate" phx-submit="validate">
           <label class="qm-drop" phx-drop-target={@uploads.audio.ref}>
             <div class="qm-drop-icon">♪</div>
-            <div class="qm-drop-main">Drop an audio file here</div>
-            <div class="qm-drop-sub">any format and size · click to browse</div>
+            <div class="qm-drop-main">Open an audio file</div>
+            <div class="qm-drop-sub">click to choose · or File → Open audio file…</div>
             <.live_file_input upload={@uploads.audio} id="qm-input-drop" class="qm-file-input" />
           </label>
         </form>
