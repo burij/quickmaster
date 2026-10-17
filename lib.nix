@@ -55,6 +55,8 @@ let
     version = appVersion;
     src = ./.;
     removeCookie = false;
+    # runtime tools used by the audio pipeline
+    extraPkgs = with pkgs; [ ffmpeg-headless mpv wxwidgets_3_2 ];
   };
 
 
