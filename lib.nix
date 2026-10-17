@@ -5,10 +5,10 @@
 
 let
 
-  appName = "tischlampe";
+  appName = "quickmaster";
   appVersion = "0.1";
 
-  beamPackages = pkgs.beam.packagesWith pkgs.beam.interpreters.erlang;
+  beamPackages = pkgs.beam27Packages;
 
   elixirEnv = [
     beamPackages.elixir
@@ -31,7 +31,7 @@ let
       alias repl='iex -S mix'
       alias script='elixir ./lib/script.exs'
       alias make='rm result; nix-build'
-      alias test='./result/bin/tischlampe start'
+      alias test='./result/bin/${appName} start'
       alias form='nixpkgs-fmt default.nix; mix format'
       # regenerates the phoenix boilerplate in the current (empty) folder;
       # app/module names are derived from the folder name
