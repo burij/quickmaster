@@ -53,10 +53,14 @@ defmodule QuickmasterWeb.HomeLiveTest do
 
     Session.load(input, "tone.wav")
     wait_until(fn -> Session.snapshot().status == :ready end)
+    wait_until(fn -> not Session.snapshot().stale end)
 
     {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
 
     assert html =~ "tone.wav"
+    assert html =~ "Original · 30 s"
+    assert html =~ "Mastered · 30 s"
+    assert html =~ "Render master"
     assert html =~ "Dyson compressor"
     assert html =~ "Peak limit"
     assert html =~ "Fast ratio"

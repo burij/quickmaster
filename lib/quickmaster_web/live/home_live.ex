@@ -20,14 +20,14 @@ defmodule QuickmasterWeb.HomeLive do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Session.subscribe()
+    waves = Session.waveforms()
 
     {:ok,
      socket
      |> assign(:snap, Session.snapshot())
      |> assign(:param_defs, param_defs())
-     |> assign(:orig, nil)
-     |> assign(:master, nil)
-     |> assign(:playback, :stopped)
+     |> assign(:waves, waves)
+     |> assign(:playback, nil)
      |> assign(:ffmpeg?, FFmpeg.available?())
      |> allow_upload(:audio,
        accept: :any,
@@ -58,8 +58,13 @@ defmodule QuickmasterWeb.HomeLive do
     {:noreply, socket}
   end
 
+  def handle_event("preview", %{"source" => "original"}, socket) do
+    Session.preview(:original)
+    {:noreply, socket}
+  end
+
   def handle_event("preview", _params, socket) do
-    Session.preview()
+    Session.preview(:master)
     {:noreply, socket}
   end
 
@@ -94,11 +99,7 @@ defmodule QuickmasterWeb.HomeLive do
     {:noreply, assign(socket, :snap, snap)}
   end
 
-  def handle_info({:waveforms, orig, master}, socket) do
-    socket = if orig, do: assign(socket, :orig, orig), else: socket
-    socket = if master, do: assign(socket, :master, master), else: socket
-    {:noreply, socket}
-  end
+  def handle_info({:waveforms, waves}, socket), do: {:noreply, assign(socket, :waves, waves)}
 
   def handle_info({:playback, state}, socket), do: {:noreply, assign(socket, :playback, state)}
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -149,8 +150,8 @@ defmodule QuickmasterWeb.HomeLive do
           <div :if={@snap.file == nil} class="qm-empty">
             No file loaded — use the Open file… button
           </div>
-          <.wave label="Original" peaks={@orig} kind="orig" />
-          <.wave label="Mastered" peaks={@master} kind="master" />
+          <.wave label="Original" peaks={@waves.original} kind="orig" />
+          <.wave label="Mastered" peaks={@waves.mastered} kind="master" />
         </div>
 
         <div class="qm-panel qm-render">
@@ -168,24 +169,7 @@ defmodule QuickmasterWeb.HomeLive do
             Settings changed — the master is being recomputed.
           </div>
 
-          <div class="qm-buttons">
-            <button
-              :if={@playback == :stopped}
-              type="button"
-              class="qm-btn qm-btn-primary"
-              phx-click="preview"
-              disabled={@snap.file == nil or @snap.status == :loading}
-            >
-              ▶ Preview 30 s
-            </button>
-            <button
-              :if={@playback == :playing}
-              type="button"
-              class="qm-btn qm-btn-stop"
-              phx-click="stop_preview"
-            >
-              ■ Stop
-            </button>
+          <div class="qm-render-row">
             <button
               type="button"
               class="qm-btn qm-btn-render"
@@ -194,6 +178,31 @@ defmodule QuickmasterWeb.HomeLive do
             >
               ⬇ Render master…
             </button>
+
+            <.preview_wave
+              :if={@waves.original_preview}
+              label="Original · 30 s"
+              peaks={@waves.original_preview}
+              kind="orig"
+              source="original"
+              playing={@playback == :original}
+            />
+
+            <.preview_wave
+              :if={@waves.mastered_preview}
+              label="Mastered · 30 s"
+              peaks={@waves.mastered_preview}
+              kind="master"
+              source="master"
+              playing={@playback == :master}
+            />
+
+            <div
+              :if={@waves.original_preview && @waves.mastered_preview == nil}
+              class="qm-mini qm-mini-pending"
+            >
+              mastering…
+            </div>
           </div>
 
           <div :if={@snap.output} class="qm-output">
@@ -316,6 +325,45 @@ defmodule QuickmasterWeb.HomeLive do
         <polygon
           :for={{peaks, i} <- Enum.with_index(@peaks || [])}
           points={wave_points(peaks, 1000, 120)}
+          class={"qm-wave-fill qm-wave-#{@kind} qm-wave-ch#{i}"}
+        />
+      </svg>
+    </div>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :peaks, :list, required: true
+  attr :kind, :string, required: true
+  attr :source, :string, required: true
+  attr :playing, :boolean, required: true
+
+  # Small waveform of the 30 s preview region, with its own play button so
+  # original and master can be compared A/B.
+  defp preview_wave(assigns) do
+    ~H"""
+    <div class="qm-mini">
+      <div class="qm-mini-head">
+        <span class={"qm-mini-label qm-mini-label-#{@kind}"}>{@label}</span>
+        <span class="qm-mini-play">
+          <button
+            :if={not @playing}
+            type="button"
+            phx-click="preview"
+            phx-value-source={@source}
+            title="Play"
+          >
+            ▶
+          </button>
+          <button :if={@playing} type="button" phx-click="stop_preview" title="Stop">
+            ■
+          </button>
+        </span>
+      </div>
+      <svg class="qm-mini-svg" viewBox="0 0 600 70" preserveAspectRatio="none">
+        <polygon
+          :for={{peaks, i} <- Enum.with_index(@peaks)}
+          points={wave_points(peaks, 600, 70)}
           class={"qm-wave-fill qm-wave-#{@kind} qm-wave-ch#{i}"}
         />
       </svg>

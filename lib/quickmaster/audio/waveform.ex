@@ -9,11 +9,16 @@ defmodule Quickmaster.Audio.Waveform do
 
   @doc """
   Return `[[{min, max}, ...], ...]`, one list of `buckets` values per channel.
+
+  `range` optionally limits the analysed part to `{from_frame, frames}`.
   """
-  @spec peaks(Path.t(), pos_integer(), pos_integer()) :: [[{float(), float()}]]
-  def peaks(path, channels, buckets) do
+  @spec peaks(Path.t(), pos_integer(), pos_integer(), {non_neg_integer(), pos_integer()} | nil) ::
+          [[{float(), float()}]]
+  def peaks(path, channels, buckets, range \\ nil) do
     size = File.stat!(path).size
-    frames = div(size, 4 * channels)
+    total = div(size, 4 * channels)
+    {from, wanted} = range || {0, total}
+    frames = max(0, min(wanted, total - from))
     bucket_frames = max(1, div(frames + buckets - 1, buckets))
 
     {:ok, fd} = :file.open(path, [:read, :binary, :raw])
@@ -21,7 +26,8 @@ defmodule Quickmaster.Audio.Waveform do
     try do
       for ch <- 0..(channels - 1) do
         for b <- 0..(buckets - 1) do
-          bucket(fd, b, bucket_frames, frames, channels, ch)
+          first = from + b * bucket_frames
+          bucket(fd, first, bucket_frames, frames - b * bucket_frames, channels, ch)
         end
       end
     after
@@ -29,9 +35,8 @@ defmodule Quickmaster.Audio.Waveform do
     end
   end
 
-  defp bucket(fd, b, bucket_frames, frames, channels, ch) do
-    first = b * bucket_frames
-    n = min(bucket_frames, frames - first)
+  defp bucket(fd, first, bucket_frames, remaining, channels, ch) do
+    n = min(bucket_frames, remaining)
 
     if n <= 0 do
       {0.0, 0.0}

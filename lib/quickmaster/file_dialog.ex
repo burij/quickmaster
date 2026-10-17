@@ -29,12 +29,15 @@ defmodule Quickmaster.FileDialog do
   end
 
   defp show(options) do
-    frame = Desktop.Window.frame(QuickmasterWindow)
-    dialog = :wxFileDialog.new(frame, options)
-    result = :wxFileDialog.showModal(dialog)
-    path = if result == @ok, do: List.to_string(:wxFileDialog.getPath(dialog))
-    :wxFileDialog.destroy(dialog)
-    path
+    # wx APIs need the active wx env in the *calling* process.
+    Desktop.Platform.Helpers.with_wx_env(fn ->
+      frame = Desktop.Window.frame(QuickmasterWindow)
+      dialog = :wxFileDialog.new(frame, options)
+      result = :wxFileDialog.showModal(dialog)
+      path = if result == @ok, do: List.to_string(:wxFileDialog.getPath(dialog))
+      :wxFileDialog.destroy(dialog)
+      path
+    end)
   rescue
     e ->
       Logger.error("file dialog failed: #{inspect(e)}")

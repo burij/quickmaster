@@ -69,6 +69,19 @@ defmodule Quickmaster.SessionTest do
     wait_until(fn -> not Session.snapshot().stale end)
   end
 
+  test "waveforms expose the preview region for both original and master", %{input: input} do
+    assert :ok = Session.load_file(input)
+    wait_until(fn -> Session.snapshot().status == :ready end)
+    wait_until(fn -> not Session.snapshot().stale end)
+
+    waves = Session.waveforms()
+    assert length(waves.original_preview) == 2
+    assert waves.original_preview |> hd() |> length() > 0
+    assert length(waves.mastered_preview) == 2
+    assert waves.mastered_preview |> hd() |> length() > 0
+    assert waves.original_preview != waves.mastered_preview
+  end
+
   test "load_file rejects a missing path" do
     assert {:error, :not_found} = Session.load_file("/does/not/exist.wav")
   end

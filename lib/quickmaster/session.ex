@@ -19,6 +19,7 @@ defmodule Quickmaster.Session do
   @topic "qm:session"
   @debounce_ms 400
   @buckets 900
+  @preview_buckets 320
   @preview_ratio 0.30
   @preview_seconds 30
 
@@ -53,9 +54,13 @@ defmodule Quickmaster.Session do
   @doc "Render to an explicit path, skipping the dialog (menu and tests)."
   def render_to(path), do: GenServer.cast(__MODULE__, {:render, path})
 
-  def preview, do: GenServer.cast(__MODULE__, :preview)
+  @doc "Play the 30 s preview of `:original` or `:master`."
+  def preview(source \\ :master), do: GenServer.cast(__MODULE__, {:preview, source})
 
   def stop_preview, do: GenServer.cast(__MODULE__, :stop_preview)
+
+  @doc "Current waveforms (full and preview region) for a fresh LiveView."
+  def waveforms, do: GenServer.call(__MODULE__, :waveforms)
 
   def default_params, do: @default_params
 
@@ -71,9 +76,11 @@ defmodule Quickmaster.Session do
     _ = state |> stop_task() |> stop_player()
     state = blank(%{params: @default_params})
     broadcast_session(state)
-    broadcast({:waveforms, nil, nil})
+    broadcast({:waveforms, waves(state)})
     {:reply, :ok, state}
   end
+
+  def handle_call(:waveforms, _from, state), do: {:reply, waves(state), state}
 
   def handle_call({:load, path, name}, _from, state) do
     dir = work_dir()
@@ -108,9 +115,9 @@ defmodule Quickmaster.Session do
       else: {:noreply, state}
   end
 
-  def handle_cast(:preview, state) do
+  def handle_cast({:preview, source}, state) do
     if state.raw,
-      do: {:noreply, schedule_advance(%{state | pending: :preview})},
+      do: {:noreply, schedule_advance(%{state | pending: {:preview, source}})},
       else: {:noreply, state}
   end
 
@@ -142,7 +149,7 @@ defmodule Quickmaster.Session do
   end
 
   def handle_info({port, {:exit_status, _status}}, %{player: port} = state) do
-    broadcast({:playback, :stopped})
+    broadcast({:playback, nil})
     {:noreply, %{state | player: nil}}
   end
 
@@ -156,11 +163,17 @@ defmodule Quickmaster.Session do
       state.raw == nil ->
         state
 
+      # the original preview does not need a fresh master
+      match?({:preview, :original}, state.pending) ->
+        {:preview, source} = state.pending
+        run_preview(%{state | pending: nil}, source)
+
       not mastered_current?(state) ->
         start_task(state, :master)
 
-      state.pending == :preview ->
-        run_preview(%{state | pending: nil})
+      match?({:preview, _}, state.pending) ->
+        {:preview, source} = state.pending
+        run_preview(%{state | pending: nil}, source)
 
       match?({:render, _}, state.pending) ->
         {:render, path} = state.pending
@@ -179,36 +192,40 @@ defmodule Quickmaster.Session do
 
   ## task results
 
-  defp finish(:decode, {:ok, info, raw, waveform}, state) do
+  defp finish(:decode, {:ok, info, raw, waveform, preview}, state) do
     state = %{
       state
       | status: :ready,
         info: info,
         raw: raw,
         orig_waveform: waveform,
+        orig_preview: preview,
+        master_waveform: nil,
+        master_preview: nil,
         error: nil
     }
 
     broadcast_session(state)
-    broadcast({:waveforms, waveform, nil})
+    broadcast({:waveforms, waves(state)})
     state
   end
 
   defp finish(:decode, {:error, reason}, state),
     do: fail(state, "Could not decode this file: #{reason_text(reason)}")
 
-  defp finish(:master, {:ok, mastered, waveform, params}, state) do
+  defp finish(:master, {:ok, mastered, waveform, preview, params}, state) do
     state = %{
       state
       | status: :ready,
         mastered: mastered,
         mastered_params: params,
         master_waveform: waveform,
+        master_preview: preview,
         error: nil
     }
 
     broadcast_session(state)
-    broadcast({:waveforms, state.orig_waveform, waveform})
+    broadcast({:waveforms, waves(state)})
     state
   end
 
@@ -228,18 +245,19 @@ defmodule Quickmaster.Session do
 
   ## workflow steps
 
-  defp run_preview(state) do
+  defp run_preview(state, source) do
     info = state.info
-    total_frames = div(File.stat!(state.mastered).size, 4 * info.channels)
+    raw = if source == :original, do: state.raw, else: state.mastered
+    total_frames = div(File.stat!(raw).size, 4 * info.channels)
     {from, frames} = preview_window(total_frames, info.sample_rate)
-    wav = Path.join(state.work_dir, "preview.wav")
+    wav = Path.join(state.work_dir, "preview_#{source}.wav")
 
-    Master.slice_to_wav(state.mastered, wav, info.sample_rate, info.channels, from, frames)
+    Master.slice_to_wav(raw, wav, info.sample_rate, info.channels, from, frames)
     state = stop_player(state)
 
     case Player.play(wav) do
       {:ok, port} ->
-        broadcast({:playback, :playing})
+        broadcast({:playback, source})
         %{state | player: port}
 
       {:error, reason} ->
@@ -267,7 +285,11 @@ defmodule Quickmaster.Session do
       with {:ok, info} <- FFmpeg.probe(input.path) do
         raw = Path.join(state.work_dir, "decoded.f32")
         {:ok, _} = FFmpeg.decode(input.path, raw)
-        {:ok, info, raw, Waveform.peaks(raw, info.channels, @buckets)}
+        total = div(File.stat!(raw).size, 4 * info.channels)
+        window = preview_window(total, info.sample_rate)
+
+        {:ok, info, raw, Waveform.peaks(raw, info.channels, @buckets),
+         Waveform.peaks(raw, info.channels, @preview_buckets, window)}
       end
     end)
   end
@@ -287,7 +309,11 @@ defmodule Quickmaster.Session do
         progress.(:master, d, t)
       end)
 
-      {:ok, mastered, Waveform.peaks(mastered, info.channels, @buckets), params}
+      total = div(File.stat!(mastered).size, 4 * info.channels)
+      window = preview_window(total, info.sample_rate)
+
+      {:ok, mastered, Waveform.peaks(mastered, info.channels, @buckets),
+       Waveform.peaks(mastered, info.channels, @preview_buckets, window), params}
     end)
   end
 
@@ -358,6 +384,7 @@ defmodule Quickmaster.Session do
 
   defp stop_player(%{player: port} = state) do
     Player.stop(port)
+    broadcast({:playback, nil})
     %{state | player: nil}
   end
 
@@ -394,6 +421,8 @@ defmodule Quickmaster.Session do
       mastered_params: nil,
       orig_waveform: nil,
       master_waveform: nil,
+      orig_preview: nil,
+      master_preview: nil,
       percent: 0.0,
       phase: nil,
       error: nil,
@@ -409,6 +438,15 @@ defmodule Quickmaster.Session do
     state = %{state | status: :error, error: message, phase: nil, percent: 0.0}
     broadcast_session(state)
     state
+  end
+
+  defp waves(state) do
+    %{
+      original: state.orig_waveform,
+      mastered: state.master_waveform,
+      original_preview: state.orig_preview,
+      mastered_preview: state.master_preview
+    }
   end
 
   defp broadcast_session(state), do: broadcast({:session, public(state)})

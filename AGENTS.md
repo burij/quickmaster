@@ -54,10 +54,15 @@ that owns state:
 2. Mastering runs automatically in a task and is recomputed (debounced,
    400 ms) whenever parameters change, so **preview and render read the
    cached mastered PCM** and stay cheap.
-3. `preview/0` plays 30 s starting at 30 % of the file through `mpv`.
+3. `preview/1` plays the 30 s window (30 % in) of `:original` or `:master`
+   through `mpv`; `:original` does not wait for a fresh master.
 4. `render/0` asks for a target path with the native save dialog and writes
-   the original format/metadata there; `render_to/1` skips the dialog (menu
-   and tests). Progress is broadcast on the `"qm:session"` PubSub topic.
+   the original format/metadata there; `render_to/1` skips the dialog
+   (tests). Progress is broadcast on the `"qm:session"` PubSub topic.
+
+`Session.waveforms/0` returns both full waveforms and the preview-region
+ones; the bottom bar shows the original and mastered preview region next to
+each other, each with its own play button for A/B comparison.
 
 ## UI
 
@@ -67,7 +72,9 @@ that owns state:
   sized 1180×800 so the whole panel fits without scrolling.
   Upload/decode progress is shown as a spinner left of `Open file…`.
 - `lib/quickmaster/file_dialog.ex` — native `wxFileDialog` save dialog used
-  by `Session.render/0` to pick the target path.
+  by `Session.render/0` to pick the target path. wx APIs need
+  `Desktop.Platform.Helpers.with_wx_env/1` in the calling process, otherwise
+  they fail with `{:wx, :unknown_env}`.
 - Files are opened with the `Open file…` button (`<input type=file>`), which
   uses the native GTK chooser under wxWebView.
 - `priv/static/assets/js/phoenix.js` (Phoenix `Socket`) and `app.js`

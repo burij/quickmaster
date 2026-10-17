@@ -405,11 +405,74 @@ body {
   margin-bottom: 10px;
 }
 
-.qm-buttons {
+.qm-render-row {
   display: flex;
-  gap: 12px;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.qm-mini {
+  flex: 1 1 220px;
+  min-width: 170px;
+}
+
+.qm-mini-head {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+
+.qm-mini-label {
+  color: var(--qm-dim);
+}
+
+.qm-mini-label-orig {
+  color: #5b8fd6;
+}
+
+.qm-mini-label-master {
+  color: var(--qm-amber);
+}
+
+.qm-mini-play button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--qm-edge);
+  background: linear-gradient(180deg, #3a3f47, #262a30);
+  color: var(--qm-amber);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qm-mini-play button:hover {
+  filter: brightness(1.2);
+}
+
+.qm-mini-svg {
+  display: block;
+  width: 100%;
+  height: 70px;
+  background: linear-gradient(180deg, #0e1013, #14171b);
+  border: 1px solid var(--qm-edge);
+  border-radius: 8px;
+}
+
+.qm-mini-pending {
+  display: grid;
+  place-items: center;
+  height: 70px;
+  border: 1px dashed var(--qm-edge);
+  border-radius: 8px;
+  color: var(--qm-dim);
+  font-size: 12px;
 }
 
 .qm-btn {
@@ -435,20 +498,10 @@ body {
   cursor: not-allowed;
 }
 
-.qm-btn-primary {
-  background: linear-gradient(180deg, #3f7d55, #295c3b);
-  border-color: #2f7d4a;
-}
-
 .qm-btn-render {
   background: linear-gradient(180deg, var(--qm-amber), var(--qm-amber-2));
   border-color: #b06a12;
   color: #241703;
-}
-
-.qm-btn-stop {
-  background: linear-gradient(180deg, #8c3a33, #63261f);
-  border-color: #7a332c;
 }
 
 .qm-btn-ghost {
