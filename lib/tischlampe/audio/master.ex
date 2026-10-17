@@ -37,7 +37,14 @@ defmodule Tischlampe.Audio.Master do
   Copy `frames` frames starting at `from_frame` from a raw f32le file into a
   32-bit float WAV file (used for preview playback).
   """
-  @spec slice_to_wav(Path.t(), Path.t(), pos_integer(), pos_integer(), non_neg_integer(), pos_integer()) ::
+  @spec slice_to_wav(
+          Path.t(),
+          Path.t(),
+          pos_integer(),
+          pos_integer(),
+          non_neg_integer(),
+          pos_integer()
+        ) ::
           :ok
   def slice_to_wav(raw_path, wav_path, sample_rate, channels, from_frame, frames) do
     frame_bytes = channels * 4

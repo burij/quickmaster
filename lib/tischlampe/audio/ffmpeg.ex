@@ -172,8 +172,11 @@ defmodule Tischlampe.Audio.FFmpeg do
 
   defp to_float(nil), do: nil
   defp to_float(v) when is_number(v), do: v * 1.0
-  defp to_float(v) when is_binary(v), do: (case Float.parse(v) do
-    {f, _} -> f
-    :error -> nil
-  end)
+
+  defp to_float(v) when is_binary(v),
+    do:
+      (case Float.parse(v) do
+         {f, _} -> f
+         :error -> nil
+       end)
 end

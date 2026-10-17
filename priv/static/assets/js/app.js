@@ -7761,9 +7761,3 @@ removing illegal node: "${("outerHTML" in childNode && childNode.outerHTML || ch
   }
   return __toCommonJS(phoenix_live_view_exports);
 })();
-
-// Tischlampe: boot the LiveView client (served precompiled, no node/esbuild)
-window.addEventListener("DOMContentLoaded", () => {
-  const csrf = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-  new window.LiveView.LiveSocket("/live", { params: { _csrf_token: csrf } }).connect()
-})

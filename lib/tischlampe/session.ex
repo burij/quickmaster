@@ -34,8 +34,11 @@ defmodule Tischlampe.Session do
   @doc "Current public snapshot (everything except the waveforms)."
   def snapshot, do: GenServer.call(__MODULE__, :snapshot)
 
+  @doc "Drop the current file and go back to the empty state."
+  def reset, do: GenServer.call(__MODULE__, :reset)
+
   @doc "Load `path` (uploaded temp file) under its original `name`."
-  def load(path, name), do: GenServer.call(__MODULE__, {:load, path, name}, 30_000)
+  def load(path, name), do: GenServer.call(__MODULE__, {:load, path, name}, 120_000)
 
   def set_params(params), do: GenServer.cast(__MODULE__, {:set_params, params})
 
@@ -54,6 +57,14 @@ defmodule Tischlampe.Session do
 
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, public(state), state}
+
+  def handle_call(:reset, _from, state) do
+    _ = state |> stop_task() |> stop_player()
+    state = blank(%{params: @default_params})
+    broadcast_session(state)
+    broadcast({:waveforms, nil, nil})
+    {:reply, :ok, state}
+  end
 
   def handle_call({:load, path, name}, _from, state) do
     stop_task(state)
@@ -89,7 +100,9 @@ defmodule Tischlampe.Session do
   end
 
   def handle_cast(:render, state) do
-    if state.raw, do: {:noreply, schedule_advance(%{state | pending: :render})}, else: {:noreply, state}
+    if state.raw,
+      do: {:noreply, schedule_advance(%{state | pending: :render})},
+      else: {:noreply, state}
   end
 
   def handle_cast(:preview, state) do

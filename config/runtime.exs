@@ -32,10 +32,10 @@ if config_env() == :prod do
   # want to use a different value for prod and you most likely don't want
   # to check this value into version control, so we use an environment
   # variable instead.
+  # local desktop app (loopback only + Desktop.Auth):
+  # fixed default is fine, no env vars needed at runtime
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
-      # local desktop app (loopback only + Desktop.Auth):
-      # fixed default is fine, no env vars needed at runtime
       "tischlampe-local-default-secret-7f3c9a1e5d2b4f6a8c0e1b3d5f7a9c2e"
 
   port = String.to_integer(System.get_env("PORT", "4000"))

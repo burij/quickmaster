@@ -311,8 +311,7 @@ defmodule Tischlampe.Audio.Dyson do
     p16 = p15 * ef + elem(t, 16) * (1.0 - ef)
     m16 = max(m15, p16)
 
-    {{lv0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16},
-     m16}
+    {{lv0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16}, m16}
   end
 
   defp db_co(g) when g > -90.0, do: :math.pow(10.0, g * 0.05)

@@ -52,7 +52,9 @@ defmodule Tischlampe.Audio.PipelineTest do
     mraw = Path.join(dir, "master.f32")
 
     assert :ok =
-             Master.master_raw(raw, mraw, info.sample_rate, info.channels, @params, fn _, _ -> :ok end)
+             Master.master_raw(raw, mraw, info.sample_rate, info.channels, @params, fn _, _ ->
+               :ok
+             end)
 
     assert File.stat!(mraw).size == bytes
 
