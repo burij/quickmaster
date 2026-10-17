@@ -29,6 +29,13 @@ defmodule Quickmaster.Audio.Player do
   @doc "Stop a running playback port."
   @spec stop(port()) :: :ok
   def stop(port) do
+    # Closing the port alone does not reliably stop the child process, so
+    # signal mpv by OS pid as well.
+    case Port.info(port, :os_pid) do
+      {:os_pid, os_pid} -> System.cmd("kill", [to_string(os_pid)], stderr_to_stdout: true)
+      _ -> :ok
+    end
+
     _ = Port.command(port, "q\n")
     Port.close(port)
     :ok

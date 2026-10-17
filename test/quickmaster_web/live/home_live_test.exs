@@ -12,13 +12,16 @@ defmodule QuickmasterWeb.HomeLiveTest do
   end
 
   test "shows the effect UI on an empty session", %{conn: conn} do
-    {:ok, _view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
+    {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
 
     assert html =~ "Quickmaster"
     assert html =~ "Dyson compressor"
     assert html =~ "Peak limit"
     assert html =~ "No file loaded"
     assert html =~ "qm-knob"
+
+    # saving is impossible without a finished master
+    assert render(view) =~ ~r/id="qm-save"[^>]*disabled/
   end
 
   test "renders while an upload is in progress", %{conn: conn} do
@@ -60,11 +63,11 @@ defmodule QuickmasterWeb.HomeLiveTest do
     assert html =~ "tone.wav"
     assert html =~ "Original · 30 s"
     assert html =~ "Mastered · 30 s"
-    assert html =~ "Render master"
+    assert html =~ "Save"
+    refute render(view) =~ ~r/id="qm-save"[^>]*disabled/
     assert html =~ "Dyson compressor"
     assert html =~ "Peak limit"
     assert html =~ "Fast ratio"
-    assert html =~ "Render master"
     assert html =~ "phx-hook=\"Knob\"" or html =~ "phx-hook=Knob"
 
     # knob pushes a value, session params update

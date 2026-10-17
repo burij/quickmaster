@@ -116,9 +116,21 @@ defmodule Quickmaster.Session do
   end
 
   def handle_cast({:preview, source}, state) do
-    if state.raw,
-      do: {:noreply, schedule_advance(%{state | pending: {:preview, source}})},
-      else: {:noreply, state}
+    cond do
+      # playback does not depend on the master task, so the original can be
+      # auditioned while mastering is still running
+      state.raw == nil ->
+        {:noreply, state}
+
+      source == :original ->
+        {:noreply, run_preview(state, :original)}
+
+      mastered_current?(state) ->
+        {:noreply, run_preview(state, :master)}
+
+      true ->
+        {:noreply, schedule_advance(%{state | pending: {:preview, source}})}
+    end
   end
 
   def handle_cast(:stop_preview, state), do: {:noreply, stop_player(state)}

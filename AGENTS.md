@@ -42,7 +42,8 @@ processor, so channels are independent.
   `Dyson` instance per channel, reporting progress per chunk; also writes
   the preview WAV slice.
 - `lib/quickmaster/audio/player.ex` — preview playback through `mpv`
-  (the webview cannot be trusted for audio output).
+  (the webview cannot be trusted for audio output). `stop/1` kills mpv by
+  OS pid; closing the port alone does not stop it.
 
 ## Workflow (Session)
 
@@ -69,8 +70,9 @@ each other, each with its own play button for A/B comparison.
 - `lib/quickmaster_web/live/home_live.ex` — the effect panel is the start
   screen: rotary knobs with numeric inputs, original + mastered waveforms
   (inline SVG), preview and render buttons, progress bar. The window is
-  sized 1180×800 so the whole panel fits without scrolling.
+  sized 1180×840 so the whole panel fits without scrolling.
   Upload/decode progress is shown as a spinner left of `Open file…`.
+  `Save` stays disabled until the background master is current.
 - `lib/quickmaster/file_dialog.ex` — native `wxFileDialog` save dialog used
   by `Session.render/0` to pick the target path. wx APIs need
   `Desktop.Platform.Helpers.with_wx_env/1` in the calling process, otherwise

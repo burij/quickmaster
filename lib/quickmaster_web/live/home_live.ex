@@ -171,12 +171,13 @@ defmodule QuickmasterWeb.HomeLive do
 
           <div class="qm-render-row">
             <button
+              id="qm-save"
               type="button"
               class="qm-btn qm-btn-render"
               phx-click="render"
-              disabled={@snap.file == nil or @snap.status == :loading}
+              disabled={not save_ready?(@snap)}
             >
-              ⬇ Render master…
+              ⬇ Save
             </button>
 
             <.preview_wave
@@ -338,35 +339,32 @@ defmodule QuickmasterWeb.HomeLive do
   attr :source, :string, required: true
   attr :playing, :boolean, required: true
 
-  # Small waveform of the 30 s preview region, with its own play button so
-  # original and master can be compared A/B.
+  # Small waveform of the 30 s preview region, with a play button laid over
+  # its left edge so original and master can be compared A/B.
   defp preview_wave(assigns) do
     ~H"""
     <div class="qm-mini">
       <div class="qm-mini-head">
         <span class={"qm-mini-label qm-mini-label-#{@kind}"}>{@label}</span>
-        <span class="qm-mini-play">
-          <button
-            :if={not @playing}
-            type="button"
-            phx-click="preview"
-            phx-value-source={@source}
-            title="Play"
-          >
-            ▶
-          </button>
-          <button :if={@playing} type="button" phx-click="stop_preview" title="Stop">
-            ■
-          </button>
-        </span>
       </div>
-      <svg class="qm-mini-svg" viewBox="0 0 600 70" preserveAspectRatio="none">
-        <polygon
-          :for={{peaks, i} <- Enum.with_index(@peaks)}
-          points={wave_points(peaks, 600, 70)}
-          class={"qm-wave-fill qm-wave-#{@kind} qm-wave-ch#{i}"}
-        />
-      </svg>
+      <div class="qm-mini-body">
+        <svg class="qm-mini-svg" viewBox="0 0 600 70" preserveAspectRatio="none">
+          <polygon
+            :for={{peaks, i} <- Enum.with_index(@peaks)}
+            points={wave_points(peaks, 600, 70)}
+            class={"qm-wave-fill qm-wave-#{@kind} qm-wave-ch#{i}"}
+          />
+        </svg>
+        <button
+          type="button"
+          class="qm-mini-play"
+          phx-click={if(@playing, do: "stop_preview", else: "preview")}
+          phx-value-source={@source}
+          title={if(@playing, do: "Stop", else: "Play")}
+        >
+          {if @playing, do: "■", else: "▶"}
+        </button>
+      </div>
     </div>
     """
   end
@@ -411,6 +409,11 @@ defmodule QuickmasterWeb.HomeLive do
     else
       div(Enum.sum(Enum.map(entries, & &1.progress)), length(entries))
     end
+  end
+
+  # The master must be complete before it can be saved.
+  defp save_ready?(snap) do
+    snap.file != nil and snap.status == :ready and not snap.stale
   end
 
   defp param_defs, do: @params
