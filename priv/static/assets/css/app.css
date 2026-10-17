@@ -26,7 +26,7 @@ body {
 .qm-app {
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 18px 22px 28px;
+  padding: 14px 20px 18px;
   background:
     radial-gradient(1200px 500px at 50% -10%, #2a2e36 0%, transparent 70%),
     repeating-linear-gradient(
@@ -44,8 +44,8 @@ body {
   align-items: baseline;
   gap: 14px;
   border-bottom: 1px solid var(--qm-edge);
-  padding-bottom: 12px;
-  margin-bottom: 18px;
+  padding-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .qm-brand {
@@ -99,8 +99,9 @@ body {
 
 .qm-main {
   display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 16px;
+  /* wide enough for all four knobs in a single row */
+  grid-template-columns: 520px 1fr;
+  gap: 14px;
   align-items: start;
 }
 
@@ -180,7 +181,7 @@ body {
 .qm-knobs {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
+  gap: 16px;
   justify-content: space-between;
 }
 

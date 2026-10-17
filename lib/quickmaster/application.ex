@@ -31,7 +31,11 @@ defmodule Quickmaster.Application do
          [
            app: :quickmaster,
            id: QuickmasterWindow,
-           menubar: Quickmaster.Menu,
+           title: "Quickmaster",
+           # large enough to show the whole panel without scrolling,
+           # small enough for a 1366x768 screen
+           size: {1160, 700},
+           min_size: {980, 600},
            url: &QuickmasterWeb.Endpoint.url/0
          ]}
       ]
