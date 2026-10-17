@@ -38,18 +38,19 @@ defmodule Quickmaster.Audio.FFmpeg do
   Decode `path` to raw f32le PCM at `out`.
 
   Options: `:start` (seconds) and `:duration` (seconds) to decode a slice,
-  otherwise the whole file.
+  otherwise the whole file. `-ss` is placed *before* `-i` (input seeking)
+  so a slice of a huge file decodes without reading everything before it.
   """
   @spec decode(Path.t(), Path.t(), keyword()) :: {:ok, non_neg_integer()} | {:error, term()}
   def decode(path, out, opts \\ []) do
-    slice =
-      []
-      |> add_opt("-ss", opts[:start])
-      |> add_opt("-t", opts[:duration])
+    seek = add_opt([], "-ss", opts[:start])
+    limit = add_opt([], "-t", opts[:duration])
 
     args =
-      ["-y", "-v", "error", "-i", path, "-map", "0:a:0"] ++
-        slice ++ ["-f", "f32le", "-acodec", "pcm_f32le", out]
+      ["-y", "-v", "error"] ++
+        seek ++
+        ["-i", path, "-map", "0:a:0"] ++
+        limit ++ ["-f", "f32le", "-acodec", "pcm_f32le", out]
 
     with {:ok, _} <- run(ffmpeg(), args),
          %File.Stat{size: size} <- File.stat!(out) do

@@ -155,12 +155,12 @@ defmodule QuickmasterWeb.HomeLive do
         </div>
 
         <div class="qm-panel qm-render">
-          <div :if={@snap.status == :mastering} class="qm-progress">
+          <div :if={working?(@snap)} class="qm-progress">
             <div class="qm-progress-label">
               {phase_label(@snap.phase)}
-              <span :if={@snap.phase == :master}>{round(@snap.percent)}%</span>
+              <span :if={determinate?(@snap.phase)}>{round(@snap.percent)}%</span>
             </div>
-            <div class="qm-bar" class={@snap.phase == :encode && "qm-bar-indeterminate"}>
+            <div class="qm-bar" class={not determinate?(@snap.phase) && "qm-bar-indeterminate"}>
               <div class="qm-bar-fill" style={"width: #{@snap.percent}%"}></div>
             </div>
           </div>
@@ -170,16 +170,6 @@ defmodule QuickmasterWeb.HomeLive do
           </div>
 
           <div class="qm-render-row">
-            <button
-              id="qm-save"
-              type="button"
-              class="qm-btn qm-btn-render"
-              phx-click="render"
-              disabled={not save_ready?(@snap)}
-            >
-              ⬇ Save
-            </button>
-
             <.preview_wave
               :if={@waves.original_preview}
               label="Original · 30 s"
@@ -204,6 +194,17 @@ defmodule QuickmasterWeb.HomeLive do
             >
               mastering…
             </div>
+
+            <button
+              id="qm-save"
+              type="button"
+              class="qm-btn qm-btn-render qm-save"
+              phx-click="render"
+              disabled={not save_ready?(@snap)}
+            >
+              <span :if={save_waiting?(@snap)} class="qm-spinner qm-spinner-sm"></span>
+              <span>⬇ Save</span>
+            </button>
           </div>
 
           <div :if={@snap.output} class="qm-output">
@@ -434,10 +435,19 @@ defmodule QuickmasterWeb.HomeLive do
 
   defp num(_, _), do: "—"
 
-  defp phase_label(:master), do: "Mastering"
+  defp phase_label(:decode_preview), do: "Loading preview"
+  defp phase_label(:decode_full), do: "Loading file"
+  defp phase_label(:master_preview), do: "Rendering preview"
+  defp phase_label(:master_full), do: "Mastering"
   defp phase_label(:encode), do: "Encoding"
-  defp phase_label(:decode), do: "Reading"
   defp phase_label(_), do: "Working"
+
+  defp determinate?(phase), do: phase in [:master_preview, :master_full]
+
+  defp working?(snap), do: snap.file != nil and snap.status in [:loading, :mastering]
+
+  # the master is still being prepared, so Save must wait
+  defp save_waiting?(snap), do: snap.file != nil and not save_ready?(snap)
 
   defp format_size(bytes) when bytes >= 1_000_000_000,
     do: "#{Float.round(bytes / 1_000_000_000, 1)} GB"

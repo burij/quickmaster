@@ -48,22 +48,29 @@ processor, so channels are independent.
 ## Workflow (Session)
 
 `lib/quickmaster/session.ex` is a singleton GenServer and the only place
-that owns state:
+that owns state. One phase runs at a time, **preview region first**, so
+audio is available long before a huge file is fully processed:
 
-1. `load/2` copies the uploaded file, then decodes + computes the original
-   waveform in a task.
-2. Mastering runs automatically in a task and is recomputed (debounced,
-   400 ms) whenever parameters change, so **preview and render read the
-   cached mastered PCM** and stay cheap.
-3. `preview/1` plays the 30 s window (30 % in) of `:original` or `:master`
-   through `mpv`; `:original` does not wait for a fresh master.
-4. `render/0` asks for a target path with the native save dialog and writes
-   the original format/metadata there; `render_to/1` skips the dialog
-   (tests). Progress is broadcast on the `"qm:session"` PubSub topic.
+1. `:decode_preview` — decode only the 30 s window (30 % in) using input
+   seeking, so the original preview is playable almost immediately.
+2. `:decode_full` — decode the whole file for the full original waveform.
+3. `:master_preview` — master the preview window ("Rendering preview").
+4. `:master_full` — master the whole track; only then is `Save` enabled.
 
-`Session.waveforms/0` returns both full waveforms and the preview-region
-ones; the bottom bar shows the original and mastered preview region next to
-each other, each with its own play button for A/B comparison.
+A parameter change stops a running master and re-runs phases 3-4 (debounced
+400 ms). `render/0` asks for a target path with the native save dialog and
+writes the original format/metadata there; `render_to/1` skips the dialog
+(tests). Progress is broadcast on the `"qm:session"` PubSub topic.
+
+`Session.waveforms/0` returns the full and the preview-region peaks; the
+bottom bar shows the original and mastered preview waveforms side by side,
+each with its own play button for A/B comparison, with `Save` on the right.
+`:original` playback never waits for a master; `:master` playback waits for
+phase 3 only.
+
+The preview is a fast approximation: the Dyson state starts fresh at the
+window, so the mastered preview can differ slightly from the saved file at
+the same position.
 
 ## UI
 

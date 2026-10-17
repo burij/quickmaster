@@ -482,6 +482,20 @@ body {
   font-size: 12px;
 }
 
+/* rightmost in the bottom bar */
+.qm-save {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qm-spinner-sm {
+  width: 13px;
+  height: 13px;
+  border-width: 2px;
+}
+
 .qm-btn {
   position: relative;
   padding: 10px 18px;

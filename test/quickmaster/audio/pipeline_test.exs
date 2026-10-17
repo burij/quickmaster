@@ -68,6 +68,15 @@ defmodule Quickmaster.Audio.PipelineTest do
     assert oinfo.tags["artist"] == "A"
   end
 
+  test "decode with start/duration returns only the slice", %{dir: dir, input: input} do
+    raw = Path.join(dir, "slice.f32")
+    assert {:ok, bytes} = FFmpeg.decode(input, raw, start: 1.0, duration: 1.0)
+
+    # 3 s input, 1 s slice, 2 channels, f32
+    expected = 44_100 * 2 * 4
+    assert_in_delta bytes, expected, expected * 0.1
+  end
+
   test "waveform returns min/max buckets per channel", %{dir: dir, input: input} do
     raw = Path.join(dir, "wf.f32")
     {:ok, _} = FFmpeg.decode(input, raw)

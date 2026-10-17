@@ -77,11 +77,16 @@ defmodule QuickmasterWeb.HomeLiveTest do
     wait_until(fn -> Session.snapshot().params.peak_limit == -6.0 end)
 
     # progress broadcasts drive the progress bar
-    send(view.pid, {:session, %{Session.snapshot() | status: :mastering, phase: :master}})
-    send(view.pid, {:progress, :master, 42.0})
+    snap = %{Session.snapshot() | status: :mastering, phase: :master_full}
+    send(view.pid, {:session, snap})
+    send(view.pid, {:progress, :master_full, 42.0})
     html = render(view)
     assert html =~ "Mastering"
     assert html =~ "42"
+
+    # the preview phase has its own label
+    send(view.pid, {:progress, :master_preview, 10.0})
+    assert render(view) =~ "Rendering preview"
   end
 
   defp wait_until(fun, timeout \\ 20_000) do

@@ -69,6 +69,16 @@ defmodule Quickmaster.SessionTest do
     wait_until(fn -> not Session.snapshot().stale end)
   end
 
+  test "prepares the preview region before the whole file", %{input: input} do
+    Session.subscribe()
+    assert :ok = Session.load_file(input)
+
+    phases = collect_phases([])
+    assert_before(phases, :decode_preview, :decode_full)
+    assert_before(phases, :master_preview, :master_full)
+    assert_before(phases, :decode_preview, :master_preview)
+  end
+
   test "waveforms expose the preview region for both original and master", %{input: input} do
     assert :ok = Session.load_file(input)
     wait_until(fn -> Session.snapshot().status == :ready end)
@@ -96,6 +106,35 @@ defmodule Quickmaster.SessionTest do
 
     wait_until(fn -> Session.snapshot().params == params and not Session.snapshot().stale end)
     assert Session.snapshot().params == params
+  end
+
+  # Collect the broadcast phases until the pipeline is finished.
+  defp collect_phases(acc) do
+    if Session.snapshot().status == :ready and not Session.snapshot().stale do
+      acc
+    else
+      receive do
+        {:session, %{phase: phase}} when is_atom(phase) and not is_nil(phase) ->
+          collect_phases([phase | acc])
+
+        {:progress, phase, _percent} ->
+          collect_phases([phase | acc])
+
+        _other ->
+          collect_phases(acc)
+      after
+        30_000 -> flunk("timed out collecting phases, got #{inspect(Enum.reverse(acc))}")
+      end
+    end
+  end
+
+  defp assert_before(phases, first, second) do
+    ordered = Enum.reverse(phases)
+    i = Enum.find_index(ordered, &(&1 == first))
+    j = Enum.find_index(ordered, &(&1 == second))
+    assert i != nil, "phase #{first} was never seen in #{inspect(ordered)}"
+    assert j != nil, "phase #{second} was never seen in #{inspect(ordered)}"
+    assert i < j, "expected #{first} before #{second} in #{inspect(ordered)}"
   end
 
   defp wait_until(fun, timeout \\ 20_000) do

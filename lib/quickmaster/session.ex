@@ -103,7 +103,11 @@ defmodule Quickmaster.Session do
     state = stop_player(%{state | params: params, error: nil})
 
     # A run with the old parameters is pointless once they changed.
-    state = if match?(%{kind: :master}, state.task), do: stop_task(state), else: state
+    state =
+      case state.task do
+        %{kind: kind} when kind in [:master_preview, :master_full] -> stop_task(state)
+        _ -> state
+      end
 
     broadcast_session(state)
     {:noreply, schedule_advance(state)}
@@ -170,18 +174,24 @@ defmodule Quickmaster.Session do
 
   ## the single decision step
 
+  # Phases run one at a time, preview region first so audio is available
+  # long before a huge file is fully processed.
   defp advance(%{task: nil} = state) do
     cond do
-      state.raw == nil ->
+      state.input == nil ->
         state
 
-      # the original preview does not need a fresh master
-      match?({:preview, :original}, state.pending) ->
-        {:preview, source} = state.pending
-        run_preview(%{state | pending: nil}, source)
+      state.preview_src == nil ->
+        start_task(state, :decode_preview)
+
+      state.raw == nil ->
+        start_task(state, :decode_full)
+
+      not preview_current?(state) ->
+        start_task(state, :master_preview)
 
       not mastered_current?(state) ->
-        start_task(state, :master)
+        start_task(state, :master_full)
 
       match?({:preview, _}, state.pending) ->
         {:preview, source} = state.pending
@@ -202,18 +212,19 @@ defmodule Quickmaster.Session do
     is_binary(state.mastered) and state.mastered_params == state.params
   end
 
+  defp preview_current?(state) do
+    is_binary(state.mastered_preview) and state.preview_params == state.params
+  end
+
   ## task results
 
-  defp finish(:decode, {:ok, info, raw, waveform, preview}, state) do
+  defp finish(:decode_preview, {:ok, info, src, waveform}, state) do
     state = %{
       state
       | status: :ready,
         info: info,
-        raw: raw,
-        orig_waveform: waveform,
-        orig_preview: preview,
-        master_waveform: nil,
-        master_preview: nil,
+        preview_src: src,
+        orig_preview: waveform,
         error: nil
     }
 
@@ -222,17 +233,44 @@ defmodule Quickmaster.Session do
     state
   end
 
-  defp finish(:decode, {:error, reason}, state),
+  defp finish(:decode_preview, {:error, reason}, state),
+    do: fail(state, "Could not read this file: #{reason_text(reason)}")
+
+  defp finish(:decode_full, {:ok, raw, waveform}, state) do
+    state = %{state | status: :ready, raw: raw, orig_waveform: waveform, error: nil}
+    broadcast_session(state)
+    broadcast({:waveforms, waves(state)})
+    state
+  end
+
+  defp finish(:decode_full, {:error, reason}, state),
     do: fail(state, "Could not decode this file: #{reason_text(reason)}")
 
-  defp finish(:master, {:ok, mastered, waveform, preview, params}, state) do
+  defp finish(:master_preview, {:ok, mastered, waveform, params}, state) do
+    state = %{
+      state
+      | status: :ready,
+        mastered_preview: mastered,
+        preview_params: params,
+        master_preview: waveform,
+        error: nil
+    }
+
+    broadcast_session(state)
+    broadcast({:waveforms, waves(state)})
+    state
+  end
+
+  defp finish(:master_preview, {:error, reason}, state),
+    do: fail(state, "Preview mastering failed: #{reason_text(reason)}")
+
+  defp finish(:master_full, {:ok, mastered, waveform, params}, state) do
     state = %{
       state
       | status: :ready,
         mastered: mastered,
         mastered_params: params,
         master_waveform: waveform,
-        master_preview: preview,
         error: nil
     }
 
@@ -241,7 +279,7 @@ defmodule Quickmaster.Session do
     state
   end
 
-  defp finish(:master, {:error, reason}, state),
+  defp finish(:master_full, {:error, reason}, state),
     do: fail(state, "Mastering failed: #{reason_text(reason)}")
 
   defp finish(:render, {:ok, output}, state) do
@@ -257,14 +295,14 @@ defmodule Quickmaster.Session do
 
   ## workflow steps
 
+  # Both preview sources are already exactly the 30 s window.
   defp run_preview(state, source) do
     info = state.info
-    raw = if source == :original, do: state.raw, else: state.mastered
-    total_frames = div(File.stat!(raw).size, 4 * info.channels)
-    {from, frames} = preview_window(total_frames, info.sample_rate)
+    raw = if source == :original, do: state.preview_src, else: state.mastered_preview
+    frames = div(File.stat!(raw).size, 4 * info.channels)
     wav = Path.join(state.work_dir, "preview_#{source}.wav")
 
-    Master.slice_to_wav(raw, wav, info.sample_rate, info.channels, from, frames)
+    Master.slice_to_wav(raw, wav, info.sample_rate, info.channels, 0, frames)
     state = stop_player(state)
 
     case Player.play(wav) do
@@ -275,6 +313,15 @@ defmodule Quickmaster.Session do
       {:error, reason} ->
         fail(state, "Playback failed: #{reason_text(reason)}")
     end
+  end
+
+  # Seconds for the preview window, derived from the probed duration.
+  defp preview_slice(info) do
+    sample_rate = info.sample_rate
+    total = trunc((info.duration || 0.0) * sample_rate)
+    {from, frames} = preview_window(total, sample_rate)
+    frames = if frames > 0, do: frames, else: trunc(@preview_seconds * sample_rate)
+    {from / sample_rate, frames / sample_rate}
   end
 
   defp preview_window(total_frames, sample_rate) do
@@ -290,42 +337,71 @@ defmodule Quickmaster.Session do
 
   ## tasks
 
-  defp start_task(%{task: nil} = state, :decode) do
+  # 1. only the 30 s preview window: fast, and immediately playable
+  defp start_task(%{task: nil} = state, :decode_preview) do
     input = state.input
+    state = %{state | status: :loading, phase: :decode_preview, percent: 0.0}
+    broadcast_session(state)
 
-    run_task(state, :decode, fn _progress ->
+    run_task(state, :decode_preview, fn _progress ->
       with {:ok, info} <- FFmpeg.probe(input.path) do
-        raw = Path.join(state.work_dir, "decoded.f32")
-        {:ok, _} = FFmpeg.decode(input.path, raw)
-        total = div(File.stat!(raw).size, 4 * info.channels)
-        window = preview_window(total, info.sample_rate)
-
-        {:ok, info, raw, Waveform.peaks(raw, info.channels, @buckets),
-         Waveform.peaks(raw, info.channels, @preview_buckets, window)}
+        out = Path.join(state.work_dir, "preview_src.f32")
+        {start, duration} = preview_slice(info)
+        {:ok, _} = FFmpeg.decode(input.path, out, start: start, duration: duration)
+        {:ok, info, out, Waveform.peaks(out, info.channels, @preview_buckets)}
       end
     end)
   end
 
-  defp start_task(%{task: nil} = state, :master) do
-    state = %{state | status: :mastering, phase: :master, percent: 0.0}
+  # 2. the whole file, in the background
+  defp start_task(%{task: nil} = state, :decode_full) do
+    input = state.input
+    channels = state.info.channels
+    state = %{state | status: :loading, phase: :decode_full, percent: 0.0}
     broadcast_session(state)
 
-    info = state.info
-    params = state.params
-    decoded = state.raw
+    run_task(state, :decode_full, fn _progress ->
+      raw = Path.join(state.work_dir, "decoded.f32")
+      {:ok, _} = FFmpeg.decode(input.path, raw)
+      {:ok, raw, Waveform.peaks(raw, channels, @buckets)}
+    end)
+  end
 
-    run_task(state, :master, fn progress ->
+  # 3. master the preview window first: fast, immediately playable
+  defp start_task(%{task: nil} = state, :master_preview) do
+    params = state.params
+    info = state.info
+    src = state.preview_src
+    state = %{state | status: :mastering, phase: :master_preview, percent: 0.0}
+    broadcast_session(state)
+
+    run_task(state, :master_preview, fn progress ->
+      out = Path.join(state.work_dir, "mastered_preview.f32")
+
+      Master.master_raw(src, out, info.sample_rate, info.channels, params, fn d, t ->
+        progress.(:master_preview, d, t)
+      end)
+
+      {:ok, out, Waveform.peaks(out, info.channels, @preview_buckets), params}
+    end)
+  end
+
+  # 4. then the whole track
+  defp start_task(%{task: nil} = state, :master_full) do
+    params = state.params
+    info = state.info
+    decoded = state.raw
+    state = %{state | status: :mastering, phase: :master_full, percent: 0.0}
+    broadcast_session(state)
+
+    run_task(state, :master_full, fn progress ->
       mastered = Path.join(state.work_dir, "mastered.f32")
 
       Master.master_raw(decoded, mastered, info.sample_rate, info.channels, params, fn d, t ->
-        progress.(:master, d, t)
+        progress.(:master_full, d, t)
       end)
 
-      total = div(File.stat!(mastered).size, 4 * info.channels)
-      window = preview_window(total, info.sample_rate)
-
-      {:ok, mastered, Waveform.peaks(mastered, info.channels, @buckets),
-       Waveform.peaks(mastered, info.channels, @preview_buckets, window), params}
+      {:ok, mastered, Waveform.peaks(mastered, info.channels, @buckets), params}
     end)
   end
 
@@ -418,7 +494,7 @@ defmodule Quickmaster.Session do
       })
 
     broadcast_session(state)
-    start_task(state, :decode)
+    advance(state)
   end
 
   defp blank(state) do
@@ -429,8 +505,11 @@ defmodule Quickmaster.Session do
       input: nil,
       info: nil,
       raw: nil,
+      preview_src: nil,
+      preview_params: nil,
       mastered: nil,
       mastered_params: nil,
+      mastered_preview: nil,
       orig_waveform: nil,
       master_waveform: nil,
       orig_preview: nil,
