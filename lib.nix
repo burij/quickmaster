@@ -22,6 +22,8 @@ let
     opencode
     wxwidgets_3_2 # wxWebView runtime used by elixir-desktop on Linux
     inotify-tools # phoenix_live_reload file watcher
+    ffmpeg-headless # decode/encode any audio format
+    mpv # preview playback
   ];
 
   shell = pkgs.mkShell {

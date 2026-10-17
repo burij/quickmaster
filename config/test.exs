@@ -10,6 +10,12 @@ config :tischlampe, TischlampeWeb.Endpoint,
 # Print only warnings and errors during test
 config :logger, level: :warning
 
+# Resolve external audio tools at boot so tests can find them on PATH.
+config :tischlampe,
+  ffmpeg: System.find_executable("ffmpeg") || "ffmpeg",
+  ffprobe: System.find_executable("ffprobe") || "ffprobe",
+  mpv: System.find_executable("mpv") || "mpv"
+
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 
