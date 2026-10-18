@@ -815,3 +815,6 @@ All optional. Sensible defaults via `System.find_executable/1` and `System.user_
 ---
 
 *This documentation was generated from the source code as of commit on 2026-10-18. For the latest code, see the repository.*
+<!-- TYPRESS-PROJECT
+{"v":1,"settings":{"titleStyle":"cover","bodyFont":"plexsans","lh":1.5,"align":"left","hyphLevel":"few","ink":"#1e293b","liga":false,"headColor":"#0f172a","h2":13,"h3":11,"h4":9.6,"h4Italic":false,"h1Break":"page","numbering":true,"numColor":"#2446c8","headL":"{title}","headR":"{section}","footC":"","footR":"{page}","hfRule":"head","tblStyle":"grid","tStripe":true,"thBg":"#eef2ff","thFill":true,"codeSize":8.4,"codeBg":"#f6f8fa","codeBorder":"#e5e7eb","codeKw":"#7c3aed","codeInlineBg":true,"capFont":"head","autoToc":true,"tocDepth":3},"templateId":"technik","customTemplates":[],"fonts":["plexsans","plexmono"],"images":{}}
+-->
