@@ -58,14 +58,30 @@ let
   };
 
   # The release binary is named after the OTP app (:quickmaster). Wrap it so
-  # the audio tools (and wxWidgets) are on PATH at runtime.
+  # the audio tools (and wxWidgets/GTK) are on PATH at runtime.
+  # Also need GTK settings schemas for the file chooser to work.
   runtimePath = pkgs.lib.makeBinPath (
     with pkgs; [
       ffmpeg-headless
       mpv
       wxwidgets_3_2
+      gtk3
     ]
   );
+
+  # GSettings schema directory for GTK file chooser
+  # Must point to directory containing schema source subdirs (each with glib-2.0/schemas/)
+  gsettingsSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (
+    with pkgs; [
+      gtk3
+    ]
+  );
+
+  # XDG_DATA_DIRS for WebKitGTK WebProcess - must point to directories containing
+  # glib-2.0/schemas/ (the schema source dirs, not the share root)
+  gtkSchemaDir = "${pkgs.gtk3}/share/gsettings-schemas/gtk+3-3.24.52";
+  desktopSchemaDir = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/gsettings-desktop-schemas-50.1";
+  xdgDataDirs = "${gtkSchemaDir}:${desktopSchemaDir}";
 
   package = pkgs.runCommand appName
     {
@@ -73,7 +89,9 @@ let
     } ''
     mkdir -p $out/bin
     makeWrapper ${release}/bin/quickmaster $out/bin/quickmaster \
-      --prefix PATH : ${runtimePath}
+      --prefix PATH : ${runtimePath} \
+      --set GSETTINGS_SCHEMA_DIR ${gsettingsSchemaDir} \
+      --prefix XDG_DATA_DIRS : ${xdgDataDirs}
   '';
 
 
