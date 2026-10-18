@@ -30,4 +30,4 @@ priv/cert/
 *.swo
 *.bak
 .DS_Store
-Thumbs.db
+Thumbs.db*.pdf
