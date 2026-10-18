@@ -85,13 +85,32 @@ let
 
   package = pkgs.runCommand appName
     {
-      nativeBuildInputs = [ pkgs.makeWrapper ];
+      nativeBuildInputs = [ pkgs.makeWrapper pkgs.desktop-file-utils ];
     } ''
     mkdir -p $out/bin
     makeWrapper ${release}/bin/quickmaster $out/bin/quickmaster \
       --prefix PATH : ${runtimePath} \
       --set GSETTINGS_SCHEMA_DIR ${gsettingsSchemaDir} \
       --prefix XDG_DATA_DIRS : ${xdgDataDirs}
+
+    # Install desktop entry for application menu
+    mkdir -p $out/share/applications
+    cat > $out/share/applications/${appName}.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Quickmaster
+GenericName=Audio Mastering
+Comment=Fast audio mastering with Dyson compressor
+Exec=quickmaster start
+Icon=quickmaster
+Terminal=false
+Categories=AudioVideo;AudioEditing;
+StartupNotify=true
+EOF
+
+    # Install icon in hicolor theme (256px from priv/static/images/icon.png)
+    mkdir -p $out/share/icons/hicolor/256x256/apps
+    cp ${./priv/static/images/icon.png} $out/share/icons/hicolor/256x256/apps/${appName}.png
   '';
 
 
