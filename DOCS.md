@@ -567,6 +567,37 @@ The WebProcess is a separate process spawned by WebKitGTK. It uses the standard 
 
 **Build command:** `make` (defined as `rm result; nix-build` in shell hook). Output: `result/bin/quickmaster`.
 
+### Desktop Integration
+
+The package installs a standard `.desktop` file and icon so the application appears in application launchers (GNOME, KDE, etc.):
+
+```nix
+nativeBuildInputs = [ pkgs.makeWrapper pkgs.desktop-file-utils ];
+
+mkdir -p $out/share/applications
+cat > $out/share/applications/${appName}.desktop <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Quickmaster
+GenericName=Audio Mastering
+Comment=Fast audio mastering with Dyson compressor
+Exec=quickmaster start
+Icon=quickmaster
+Terminal=false
+Categories=AudioVideo;AudioEditing;
+StartupNotify=true
+EOF
+
+mkdir -p $out/share/icons/hicolor/256x256/apps
+cp ${./priv/static/images/icon.png} $out/share/icons/hicolor/256x256/apps/${appName}.png
+```
+
+**Resulting paths:**
+- `$out/share/applications/quickmaster.desktop`
+- `$out/share/icons/hicolor/256x256/apps/quickmaster.png`
+
+When installed via `callPackage` in NixOS, the app appears in the application menu with the correct icon.
+
 ---
 
 ## Testing Strategy
