@@ -214,10 +214,10 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 ### Nix Packaging (`lib.nix` / `shell.nix`)
 
 - `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`; `GTK_THEME=Adwaita:dark` set in `shellHook`
-- `src` — `fetchFromGitHub` for a **pinned commit** (`srcRev`) of
-  `burij/quickmaster`; a moving tag would invalidate the sha256. The
-  archive carries no `deps/`, so `mixDeps` = `beamPackages.fetchMixDeps`
-  supplies the dependency tree via `mixFodDeps`
+- `src` — `fetchFromGitHub` for the release tag named after `VERSION`.
+  The archive carries no `deps/`, so `mixDeps` =
+  `beamPackages.fetchMixDeps` supplies the dependency tree via `mixFodDeps`.
+  `src` is exported so `deploy.sh` can drop the cached archive
 - `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
 - `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
@@ -228,10 +228,19 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 
 Single-sourced from `VERSION` file:
 - `mix.exs`: `version: File.read!("VERSION") |> String.trim()`
-- `lib.nix`: `appVersion = builtins.readFile ./VERSION`
-- Update: `echo "0.9.1" > VERSION`, commit, push, then set `srcRev` to
-  that commit and update the `sha256` + `mixDeps` hash in `lib.nix`.
-  `./deploy.sh` pushes main, tags `srcRev` and builds
+- `lib.nix`: `appVersion = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION)`
+
+Release flow (`./deploy.sh`):
+
+1. bump `VERSION`, commit, push `main`,
+2. `deploy.sh` creates the tag **once** (never moves it) and builds,
+3. nix reports a `got:` hash for the archive — put it into `lib.nix`,
+   commit and push,
+4. run `./deploy.sh` again: the tag already exists, the cached archive is
+   dropped and the build succeeds.
+
+The tagged tree may still carry a placeholder hash; only `main` needs the
+correct one.
 
 ## Gotchas (each of these cost real debugging time)
 
@@ -290,9 +299,11 @@ Measured on this machine (load-dependent, treat as ballpark):
   (`fetchFromGitHub`), which has no `deps/` (gitignored), so the dependency
   tree is fetched with `beamPackages.fetchMixDeps` and passed as
   `mixFodDeps`. Without it the release build has no deps and fails with
-  `module Phoenix.Component is not loaded`. Never pin `src` to a tag: moving
-  the tag changes the archive and the sha256 check fails on a clean machine
-  (a warm local store hides this).
+  `module Phoenix.Component is not loaded`.
+- Never move a release tag after its hash is pinned: the archive changes,
+  the sha256 check fails on a clean machine, and a warm store hides it by
+  serving the old archive. Fix the hash in a commit that lands *after* the
+  tag; that is why the tagged tree may carry a placeholder hash.
 - Membrane is intentionally not used: offline batch processing gains nothing
   from its streaming plugins over plain file IO.
 - **Parallel per-channel DSP was attempted but reverted** due to audio artifacts; sequential per-channel processing is stable.

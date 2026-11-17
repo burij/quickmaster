@@ -6,7 +6,7 @@
 let
 
   appName = "quickmaster";
-  appVersion = builtins.readFile ./VERSION;
+  appVersion = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
 
   beamPackages = pkgs.beam27Packages;
 
@@ -50,15 +50,15 @@ let
     '';
   };
 
-  # Builds from a pinned commit (never a moving tag: the hash would go stale).
-  # The source archive has no deps/ (gitignored), so the dependency tree is
-  # fetched as a fixed-output derivation instead of a local checkout.
-  srcRev = "8d2da77bd972fa7005807250d96a7eb69cbcb6e5";
-
+  # Builds from the release tag named after VERSION. The tag is created once
+  # and never moved: its archive hash is pinned here, and the commit that
+  # fixes this hash lands on main *after* the tag. The tagged tree may
+  # therefore still carry a placeholder hash. The archive has no deps/
+  # (gitignored), so deps come from mixDeps below.
   src = pkgs.fetchFromGitHub {
     owner = "burij";
     repo = "quickmaster";
-    rev = srcRev;
+    rev = appVersion;
     sha256 = "sha256-/ixdPnRch3Ybgx/fd4RwqfIabCS9eFGEX7cjvXiIwGw=";
   };
 
@@ -137,4 +137,10 @@ EOF
 
 
 in
-{ shell = shell; package = package; }
+{
+  shell = shell;
+  package = package;
+  # exported so deploy.sh can drop the cached archive (a re-tagged release
+  # would otherwise be served from the store)
+  inherit src;
+}

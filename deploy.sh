@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# The source is pinned to a commit in lib.nix (a moving tag would break the
-# hash), so the release tag is derived from it instead of from HEAD.
-rev=$(sed -n 's/.*srcRev = "\([0-9a-f]*\)".*/\1/p' lib.nix)
-[ -n "$rev" ] || { echo "no srcRev in lib.nix" >&2; exit 1; }
+# Pinned version = tag name = source revision in lib.nix.
+tag=$(sed 's/[[:space:]]*$//' VERSION)
 
 git push origin main
-git tag -f 0.9.0 "$rev"
-git push origin 0.9.0 --force
 
-# Build from the pinned commit. On a hash mismatch nix prints the correct
-# value: copy the "got:" hash into lib.nix (src sha256 or mixDeps hash),
-# then set srcRev to the commit whose tree you want to release.
+# The tag is created once. Moving it would change the source archive and
+# invalidate the sha256 in lib.nix, while a warm store keeps serving the old
+# archive - so the build would silently use the wrong tree.
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+  echo "tag $tag exists (not moved)"
+else
+  git tag "$tag" main
+  git push origin "$tag"
+fi
+
+# Drop the cached source archive so a re-tagged release is really re-fetched.
+srcOut=$(nix-instantiate --eval -E 'toString (import ./lib.nix {}).src' 2>/dev/null || true)
+[ -n "$srcOut" ] && nix-store --delete "$srcOut" 2>/dev/null || true
+
+# Build from the tag. On a hash mismatch nix prints the correct value: put
+# the "got:" hash into lib.nix, commit and push, then run this again.
 nix-build
