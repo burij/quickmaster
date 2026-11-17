@@ -7,7 +7,7 @@ defmodule Quickmaster.MixProject do
       version: File.read!("VERSION") |> String.trim(),
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: Mix.env() == :prod,
+      start_permanent: false,
       aliases: aliases(),
       deps: deps(),
       compilers: Mix.compilers(),
@@ -21,7 +21,20 @@ defmodule Quickmaster.MixProject do
   def application do
     [
       mod: {Quickmaster.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [
+        :logger,
+        :runtime_tools,
+        :desktop,
+        :phoenix,
+        :phoenix_html,
+        :phoenix_live_view,
+        :bandit,
+        :dns_cluster,
+        :gettext,
+        :jason,
+        :telemetry_metrics,
+        :telemetry_poller
+      ]
     ]
   end
 
