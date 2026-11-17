@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Push main branch
+# Push main and move the release tag onto it
 git push origin main
-
-# Move tag 0.9.0 to current main
 git tag -f 0.9.0 main
 git push origin 0.9.0 --force
 
-# Clear nix source cache so nix-build fetches the updated tag
-nix-store --delete /nix/store/wm984fhmjl032h1ms94g0h1fg6894rc6-source 2>/dev/null || true
-
-# After pushing, run nix-build. If it fails with a sha256 mismatch,
-# copy the "got:" hash into lib.nix (replace pkgs.lib.fakeSha256),
-# then commit, push again, and run nix-build once more.
+# Build from the tag. On a hash mismatch nix prints the correct value:
+# copy the "got:" hash into lib.nix (src sha256 or mixDeps hash) and rerun.
+nix-build

@@ -50,17 +50,28 @@ let
     '';
   };
 
+  # Builds from the GitHub release tag. The release tarball has no deps/
+  # (gitignored), so the dependency tree is fetched as a fixed-output
+  # derivation instead of relying on a local checkout.
+  src = pkgs.fetchFromGitHub {
+    owner = "burij";
+    repo = "quickmaster";
+    rev = "0.9.0";
+    sha256 = "sha256-7ScCXzfQP1h46RNnzYtb48vU0AyRYDs2mENgqhypKbA=";
+  };
+
+  mixDeps = beamPackages.fetchMixDeps {
+    pname = "${appName}-deps";
+    version = appVersion;
+    inherit src;
+    hash = "sha256-/gKFne66TpXX2z5Wf+Ei4vvnPjeKlcposd4TzqAOTig=";
+  };
+
   release = beamPackages.mixRelease {
     pname = appName;
     version = appVersion;
-    # Builds from the GitHub release tag. sha256 is a placeholder — run the
-    # build once and nix will print the correct hash.
-    src = pkgs.fetchFromGitHub {
-      owner = "burij";
-      repo = "quickmaster";
-      rev = "0.9.0";
-      sha256 = "sha256-kEiT09CTOsYvnN8mR/Nwvg43DaFAtPyyycoxF4IujlU=";
-    };
+    inherit src;
+    mixFodDeps = mixDeps;
     removeCookie = false;
   };
 
