@@ -221,7 +221,7 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 - `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
 - `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
-- `package` — wraps release with `makeWrapper`, installs `.desktop` + icon to `$out/share/applications/` and `$out/share/icons/hicolor/256x256/apps/`
+- `package` — wraps release with `makeWrapper`, installs `.desktop` + icon to `$out/share/applications/` and `$out/share/icons/hicolor/256x256/apps/`; the icon is taken from `${src}`, so `./VERSION` is the only local path reference and `lib.nix` can be dropped into another repo (e.g. `pkgs/quickmaster/lib.nix`) with only `VERSION` beside it
 - Desktop entry includes `StartupWMClass=QuickmasterWindow` for GNOME taskbar icon
 
 ### Version Management

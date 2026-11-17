@@ -132,7 +132,7 @@ EOF
 
     # Install icon in hicolor theme (256px from priv/static/images/icon.png)
     mkdir -p $out/share/icons/hicolor/256x256/apps
-    cp ${./priv/static/images/icon.png} $out/share/icons/hicolor/256x256/apps/${appName}.png
+    cp ${src}/priv/static/images/icon.png $out/share/icons/hicolor/256x256/apps/${appName}.png
   '';
 
 
