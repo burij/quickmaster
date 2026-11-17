@@ -7,10 +7,10 @@ defmodule Quickmaster.MixProject do
       version: File.read!("VERSION") |> String.trim(),
       elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
-      start_permanent: false,
+      start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      compilers: Mix.compilers(),
+      compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: Mix.env() == :dev && [Phoenix.CodeReloader] || []
     ]
   end
