@@ -1,6 +1,13 @@
 { pkgs ? import
     (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-26.05")
     { config = { }; overlays = [ ]; }
+
+  # false: build this checkout (src = ./.); true: fetch the release archive
+, fromUpstream ? false
+  # tag/rev to fetch; defaults to VERSION
+, upstreamRev ? null
+  # empty means: let nix print the correct hash on the next build
+, upstreamSha256 ? ""
 }:
 
 let
@@ -50,17 +57,26 @@ let
     '';
   };
 
-  # Builds from the release tag named after VERSION. The tag is created once
-  # and never moved: its archive hash is pinned here, and the commit that
-  # fixes this hash lands on main *after* the tag. The tagged tree may
-  # therefore still carry a placeholder hash. The archive has no deps/
-  # (gitignored), so deps come from mixDeps below.
-  src = pkgs.fetchFromGitHub {
-    owner = "burij";
-    repo = "quickmaster";
-    rev = appVersion;
-    sha256 = "sha256-/ixdPnRch3Ybgx/fd4RwqfIabCS9eFGEX7cjvXiIwGw=";
-  };
+  srcRev = if upstreamRev == null then appVersion else upstreamRev;
+
+  # Default is the checkout, so a clone builds with no hashes at all (a hash
+  # inside the tree it hashes cannot be satisfied). Pinning the release
+  # archive is the caller's job: set fromUpstream and pass upstreamSha256.
+  src =
+    if fromUpstream then
+      pkgs.fetchFromGitHub {
+        owner = "burij";
+        repo = "quickmaster";
+        rev = srcRev;
+        sha256 = if upstreamSha256 == "" then pkgs.lib.fakeSha256 else upstreamSha256;
+      }
+    else
+      pkgs.lib.cleanSourceWith {
+        src = ./.;
+        filter =
+          path: _type:
+          !(builtins.elem (baseNameOf path) [ "_build" "deps" "result" ]);
+      };
 
   mixDeps = beamPackages.fetchMixDeps {
     pname = "${appName}-deps";
@@ -137,10 +153,4 @@ EOF
 
 
 in
-{
-  shell = shell;
-  package = package;
-  # exported so deploy.sh can drop the cached archive (a re-tagged release
-  # would otherwise be served from the store)
-  inherit src;
-}
+{ shell = shell; package = package; }

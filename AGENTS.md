@@ -214,10 +214,12 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 ### Nix Packaging (`lib.nix` / `shell.nix`)
 
 - `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`; `GTK_THEME=Adwaita:dark` set in `shellHook`
-- `src` — `fetchFromGitHub` for the release tag named after `VERSION`.
-  The archive carries no `deps/`, so `mixDeps` =
-  `beamPackages.fetchMixDeps` supplies the dependency tree via `mixFodDeps`.
-  `src` is exported so `deploy.sh` can drop the cached archive
+- `src` — two modes via arguments: `fromUpstream = false` (default) builds
+  this checkout (`src = ./.`, no hashes at all); `fromUpstream = true`
+  fetches `pkgs.fetchFromGitHub` at `upstreamRev` (defaults to `VERSION`)
+  with `upstreamSha256` (empty string ⇒ `lib.fakeSha256`, so nix prints the
+  correct hash). The archive carries no `deps/`, so `mixDeps` =
+  `beamPackages.fetchMixDeps` supplies the dependency tree via `mixFodDeps`
 - `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
 - `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
@@ -230,17 +232,18 @@ Single-sourced from `VERSION` file:
 - `mix.exs`: `version: File.read!("VERSION") |> String.trim()`
 - `lib.nix`: `appVersion = pkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION)`
 
-Release flow (`./deploy.sh`):
+Release flow — the tree carries **no** archive hash, so there is no
+self-reference to resolve:
 
-1. bump `VERSION`, commit, push `main`,
-2. `deploy.sh` creates the tag **once** (never moves it) and builds,
-3. nix reports a `got:` hash for the archive — put it into `lib.nix`,
-   commit and push,
-4. run `./deploy.sh` again: the tag already exists, the cached archive is
-   dropped and the build succeeds.
+1. bump `VERSION`, commit, push `main`, tag it (`git tag <ver> main`),
+2. nix reports a `got:` hash for the archive:
+   `nix-build -E 'import ./lib.nix { fromUpstream = true; }' -A package`,
+3. whoever builds the release passes that hash in:
+   `import ./lib.nix { fromUpstream = true; upstreamSha256 = "sha256-…"; }`
+   (that is how the NixOS config in `pkgs/quickmaster` consumes it).
 
-The tagged tree may still carry a placeholder hash; only `main` needs the
-correct one.
+A moved tag is harmless for this repo but breaks consumers that pinned the
+old archive, so treat it as immutable.
 
 ## Gotchas (each of these cost real debugging time)
 
@@ -300,10 +303,10 @@ Measured on this machine (load-dependent, treat as ballpark):
   tree is fetched with `beamPackages.fetchMixDeps` and passed as
   `mixFodDeps`. Without it the release build has no deps and fails with
   `module Phoenix.Component is not loaded`.
-- Never move a release tag after its hash is pinned: the archive changes,
-  the sha256 check fails on a clean machine, and a warm store hides it by
-  serving the old archive. Fix the hash in a commit that lands *after* the
-  tag; that is why the tagged tree may carry a placeholder hash.
+- Do not put an archive hash of your own repo into that repo: the tree is
+  part of what gets hashed, so the pin can never match. That is why `src`
+  defaults to `./.` and callers pass `upstreamSha256`. A warm local store
+  hides a stale pin by serving the old archive.
 - Membrane is intentionally not used: offline batch processing gains nothing
   from its streaming plugins over plain file IO.
 - **Parallel per-channel DSP was attempted but reverted** due to audio artifacts; sequential per-channel processing is stable.
