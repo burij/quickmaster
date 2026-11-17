@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.1] — 2026-11-17
+
+### Fixes
+- Packaged app no longer aborts with `Settings schema
+  'org.gtk.Settings.FileChooser' is not installed` when opening the file
+  chooser. `GSETTINGS_SCHEMA_DIR` and `XDG_DATA_DIRS` were pointing at the
+  schema *parent* instead of the directory holding `gschemas.compiled`
+  (`…/gsettings-schemas/<pkg>/glib-2.0/schemas`). Both are now derived from
+  `glib.getSchemaPath`. Only the packaged build was affected; the dev shell
+  got the schemas from its environment.
+
 ## [0.9.0] — 2026-11-17 — First Beta
 
 Desktop audio-mastering app: Phoenix LiveView in a native window (elixir-desktop, wxWebView on Linux).

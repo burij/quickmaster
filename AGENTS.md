@@ -26,7 +26,7 @@ Product name, OTP app (`:quickmaster`) and module namespace
 - **Multi-window support** — independent sessions via `Quickmaster.Application.new_window/1`,
 - **Headless CLI API** — full control via `mix quickmaster.cli` with `QUICKMASTER_HEADLESS=true`,
 - **GNOME taskbar icon fix** — `StartupWMClass=QuickmasterWindow` + explicit `wxFrame.setName`,
-- **Version management** — single-sourced from `VERSION` file (0.9.0).
+- **Version management** — single-sourced from `VERSION` file (0.9.1).
 
 Open work is in **Backlog** at the bottom. The only real weak spot is DSP
 speed (see *Known limits*).
@@ -222,7 +222,12 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
   `beamPackages.fetchMixDeps` supplies the dependency tree via `mixFodDeps`
 - `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
-- `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
+- `gsettingsSchemaDir` / `xdgDataDirs` — derived from `glib.getSchemaPath`.
+  `GSETTINGS_SCHEMA_DIR` needs the dir holding `gschemas.compiled`
+  (`…/gsettings-schemas/<pkg>/glib-2.0/schemas`), `XDG_DATA_DIRS` the parent.
+  Pointing at `…/gsettings-schemas` (the grandparent) loses
+  `org.gtk.Settings.FileChooser` and GTK aborts on the file chooser. The dev
+  shell hides this because its environment already provides the schemas.
 - `package` — wraps release with `makeWrapper`, installs `.desktop` + icon to `$out/share/applications/` and `$out/share/icons/hicolor/256x256/apps/`; the icon is taken from `${src}`, so `./VERSION` is the only local path reference and `lib.nix` can be dropped into another repo (e.g. `pkgs/quickmaster/lib.nix`) with only `VERSION` beside it
 - Desktop entry includes `StartupWMClass=QuickmasterWindow` for GNOME taskbar icon
 

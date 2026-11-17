@@ -107,17 +107,20 @@ let
 
   # GSettings schema directory for GTK file chooser
   # Must point to directory containing schema source subdirs (each with glib-2.0/schemas/)
-  gsettingsSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (
-    with pkgs; [
-      gtk3
-    ]
-  );
+  schemaOwners = with pkgs; [ gtk3 gsettings-desktop-schemas ];
 
-  # XDG_DATA_DIRS for WebKitGTK WebProcess - must point to directories containing
-  # glib-2.0/schemas/ (the schema source dirs, not the share root)
-  gtkSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (with pkgs; [ gtk3 ]);
-  desktopSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (with pkgs; [ gsettings-desktop-schemas ]);
-  xdgDataDirs = "${gtkSchemaDir}:${desktopSchemaDir}";
+  # glib searches GSETTINGS_SCHEMA_DIR for gschemas.compiled, which lives in
+  # …/gsettings-schemas/<pkg>/glib-2.0/schemas (getSchemaPath returns exactly
+  # that). Pointing one level higher silently loses the schemas, e.g.
+  # org.gtk.Settings.FileChooser, and GTK aborts on the file chooser.
+  schemaPaths = map pkgs.glib.getSchemaPath schemaOwners;
+  gsettingsSchemaDir = pkgs.lib.concatStringsSep ":" schemaPaths;
+
+  # XDG_DATA_DIRS (WebKitGTK WebProcess) wants the parent that holds
+  # glib-2.0/schemas, i.e. the same path without the schema suffix.
+  xdgDataDirs = pkgs.lib.concatStringsSep ":" (
+    map (pkgs.lib.removeSuffix "/glib-2.0/schemas") schemaPaths
+  );
 
   package = pkgs.runCommand appName
     {
