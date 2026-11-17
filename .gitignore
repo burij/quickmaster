@@ -31,3 +31,4 @@ priv/cert/
 *.bak
 .DS_Store
 Thumbs.db*.pdf
+quickmaster.log

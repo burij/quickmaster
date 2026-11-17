@@ -523,6 +523,8 @@ shell = pkgs.mkShell {
 
 Provides: `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`.
 
+The shellHook exports `GTK_THEME=Adwaita:dark` so the title bar stays dark even in a light system theme.
+
 ### Production Package
 
 ```nix
@@ -553,7 +555,8 @@ package = pkgs.runCommand "quickmaster" { nativeBuildInputs = [pkgs.makeWrapper]
   makeWrapper ${release}/bin/quickmaster $out/bin/quickmaster \
     --prefix PATH : ${runtimePath} \
     --set GSETTINGS_SCHEMA_DIR ${gsettingsSchemaDir} \
-    --prefix XDG_DATA_DIRS : ${xdgDataDirs}
+    --prefix XDG_DATA_DIRS : ${xdgDataDirs} \
+    --set GTK_THEME Adwaita:dark
 '';
 ```
 
@@ -849,7 +852,7 @@ Version is single-sourced from `VERSION` file:
 
 ```bash
 # Update version
-echo "0.1.2" > VERSION
+echo "0.9.0" > VERSION
 ```
 
 Both `mix.exs` and `lib.nix` read from this file automatically.

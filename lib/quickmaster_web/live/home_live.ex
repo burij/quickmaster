@@ -17,22 +17,99 @@ defmodule QuickmasterWeb.HomeLive do
     {:crate, "Compression", "", 0.0, 1.0, 0.01, 2}
   ]
 
+  @version File.read!("VERSION") |> String.trim()
+
   @impl true
-  def mount(_params, _session, socket) do
-    if connected?(socket), do: Session.subscribe()
-    waves = Session.waveforms()
+  def mount(%{"window_id" => window_id}, _session, socket) do
+    window_id = String.to_integer(window_id)
+    if connected?(socket), do: Session.subscribe(window_id)
+    waves = Session.waveforms(window_id)
 
     {:ok,
      socket
-     |> assign(:snap, Session.snapshot())
+     |> assign(:window_id, window_id)
+     |> assign(:snap, Session.snapshot(window_id))
      |> assign(:param_defs, param_defs())
      |> assign(:waves, waves)
      |> assign(:playback, nil)
      |> assign(:ffmpeg?, FFmpeg.available?())
+     |> assign(:version, @version)
      |> allow_upload(:audio,
        accept: :any,
        max_entries: 1,
-       max_file_size: 4_000_000_000,
+       max_file_size: 16_000_000_000,
+       chunk_size: 1_000_000,
+       auto_upload: true,
+       progress: &handle_progress/3
+     )}
+  end
+
+  defp ensure_session_and_subscribe(window_id, socket) do
+    case Quickmaster.SessionSupervisor.start_session(window_id) do
+      {:ok, _pid} -> :ok
+      {:error, :already_started} -> :ok
+      {:error, reason} -> raise "Failed to start session: #{inspect(reason)}"
+    end
+    if connected?(socket) do
+      Session.subscribe(window_id)
+    end
+    :ok
+  end
+
+  defp ensure_session_and_subscribe(window_id, socket) do
+    case Quickmaster.SessionSupervisor.start_session(window_id) do
+      {:ok, _pid} -> :ok
+      {:error, :already_started} -> :ok
+      {:error, reason} -> raise "Failed to start session: #{inspect(reason)}"
+    end
+    if connected?(socket) do
+      Session.subscribe(window_id)
+    end
+    :ok
+  end
+
+  @impl true
+  def mount(%{"window_id" => window_id}, _session, socket) do
+    window_id = String.to_integer(window_id)
+    ensure_session_and_subscribe(window_id, socket)
+
+    {:ok,
+     socket
+     |> assign(:window_id, window_id)
+     |> assign(:snap, Session.snapshot(window_id))
+     |> assign(:param_defs, param_defs())
+     |> assign(:waves, Session.waveforms(window_id))
+     |> assign(:playback, nil)
+     |> assign(:ffmpeg?, FFmpeg.available?())
+     |> assign(:version, @version)
+     |> allow_upload(:audio,
+       accept: :any,
+       max_entries: 1,
+       max_file_size: 16_000_000_000,
+       chunk_size: 1_000_000,
+       auto_upload: true,
+       progress: &handle_progress/3
+     )}
+  end
+
+  @impl true
+  def mount(_params, _session, socket) do
+    window_id = 1
+    ensure_session_and_subscribe(window_id, socket)
+
+    {:ok,
+     socket
+     |> assign(:window_id, window_id)
+     |> assign(:snap, Session.snapshot(window_id))
+     |> assign(:param_defs, param_defs())
+     |> assign(:waves, Session.waveforms(window_id))
+     |> assign(:playback, nil)
+     |> assign(:ffmpeg?, FFmpeg.available?())
+     |> assign(:version, @version)
+     |> allow_upload(:audio,
+       accept: :any,
+       max_entries: 1,
+       max_file_size: 16_000_000_000,
        chunk_size: 1_000_000,
        auto_upload: true,
        progress: &handle_progress/3
@@ -43,10 +120,11 @@ defmodule QuickmasterWeb.HomeLive do
   def handle_event("validate", _params, socket), do: {:noreply, socket}
 
   def handle_event("param", %{"name" => name, "value" => value}, socket) do
+    window_id = socket.assigns.window_id
     with {:ok, key, min, max, step} <- param_meta(name),
          {v, _} <- Float.parse(value) do
       params = Map.put(socket.assigns.snap.params, key, clamp(v, min, max, step))
-      Session.set_params(params)
+      Session.set_params(window_id, params)
       {:noreply, assign(socket, :snap, %{socket.assigns.snap | params: params})}
     else
       _ -> {:noreply, socket}
@@ -54,34 +132,54 @@ defmodule QuickmasterWeb.HomeLive do
   end
 
   def handle_event("reset", _params, socket) do
-    Session.set_params(Session.default_params())
+    Session.set_params(socket.assigns.window_id, Session.default_params())
     {:noreply, socket}
   end
 
+  def handle_event("pregain", _params, socket) do
+    # Toggle locally (phx-value sends OLD value due to checkbox binding timing)
+    window_id = socket.assigns.window_id
+    new_enabled = not socket.assigns.snap.params.pregain_enabled
+    params = Map.put(socket.assigns.snap.params, :pregain_enabled, new_enabled)
+    Session.set_params(window_id, params)
+    {:noreply, assign(socket, :snap, %{socket.assigns.snap | params: params})}
+  end
+
   def handle_event("preview", %{"source" => "original"}, socket) do
-    Session.preview(:original)
+    Session.preview(socket.assigns.window_id, :original)
     {:noreply, socket}
   end
 
   def handle_event("preview", _params, socket) do
-    Session.preview(:master)
+    Session.preview(socket.assigns.window_id, :master)
     {:noreply, socket}
   end
 
   def handle_event("stop_preview", _params, socket) do
-    Session.stop_preview()
+    Session.stop_preview(socket.assigns.window_id)
     {:noreply, socket}
   end
 
+  def handle_event("open_file", _params, socket) do
+    case Session.open_file(socket.assigns.window_id) do
+      {:ok, _result} ->
+        {:noreply, socket}
+      {:error, :cancelled} ->
+        {:noreply, socket}
+      {:error, reason} ->
+        {:noreply, assign(socket, :snap, %{socket.assigns.snap | error: "Failed to open file: #{reason}"})}
+    end
+  end
+
   def handle_event("render", _params, socket) do
-    Session.render()
+    Session.render(socket.assigns.window_id)
     {:noreply, socket}
   end
 
   def handle_progress(:audio, entry, socket) do
     if entry.done? do
       consume_uploaded_entries(socket, :audio, fn %{path: path}, entry ->
-        Session.load(path, entry.client_name)
+        Session.load(socket.assigns.window_id, path, entry.client_name)
         {:ok, entry.client_name}
       end)
 
@@ -115,6 +213,7 @@ defmodule QuickmasterWeb.HomeLive do
           <img src={~p"/images/logo.svg"} alt="" class="qm-logo" width="34" height="34" />
           <span class="qm-title">Quickmaster</span>
         </div>
+        <div class="qm-version">v{@version}</div>
         <div class="qm-subtitle">fast audio mastering · Dyson compressor</div>
       </header>
 
@@ -125,33 +224,62 @@ defmodule QuickmasterWeb.HomeLive do
       <div class="qm-main">
         <.file_panel snap={@snap} uploads={@uploads} />
 
-        <div class="qm-panel qm-controls">
-          <div class="qm-panel-title">Dyson compressor</div>
-          <div class="qm-knobs">
-            <.knob
-              :for={{key, label, unit, min, max, step, dec} <- @param_defs}
-              name={key}
-              label={label}
-              unit={unit}
-              min={min}
-              max={max}
-              step={step}
-              decimals={dec}
-              value={Map.get(@snap.params, key)}
-            />
-          </div>
-          <div class="qm-control-actions">
-            <button type="button" class="qm-btn" phx-click="reset">Reset</button>
-          </div>
-        </div>
+        <div class="qm-grid">
+          <div class="qm-left-col">
+            <div class="qm-panel qm-controls">
+              <div class="qm-panel-title">Dyson compressor</div>
+              <div class="qm-knobs">
+                <.knob
+                  :for={{key, label, unit, min, max, step, dec} <- @param_defs}
+                  name={key}
+                  label={label}
+                  unit={unit}
+                  min={min}
+                  max={max}
+                  step={step}
+                  decimals={dec}
+                  value={Map.get(@snap.params, key)}
+                />
+              </div>
+              <div class="qm-control-actions">
+                <button type="button" class="qm-btn" phx-click="reset">Reset</button>
+              </div>
+            </div>
 
-        <div class="qm-panel qm-waves">
-          <div class="qm-panel-title">Waveform</div>
-          <div :if={@snap.file == nil} class="qm-empty">
-            No file loaded — use the Open file… button
+            <div class="qm-panel qm-pregain">
+              <div class="qm-panel-title">Pregain Stage</div>
+              <div class="qm-pregain-row">
+                <div class="qm-pregain-main">
+                  <label class="qm-toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={Map.get(@snap.params, :pregain_enabled, true)}
+                      phx-click="pregain"
+                    />
+                    <span class="qm-toggle-track">
+                      <span class="qm-toggle-thumb"></span>
+                      <span class="qm-toggle-label qm-toggle-i">|</span>
+                      <span class="qm-toggle-label qm-toggle-o">O</span>
+                    </span>
+                  </label>
+                  <div class="qm-pregain-label">Auto-normalize to 0 dBFS</div>
+                </div>
+                <div class="qm-pregain-led-wrap">
+                  <div class={"qm-led " <> if(Map.get(@snap.params, :pregain_enabled, true), do: "qm-led-on", else: "")}></div>
+                </div>
+              </div>
+              <div class="qm-pregain-hint">Clamped to 20 dB max gain</div>
+            </div>
           </div>
-          <.wave label="Original" peaks={@waves.original} kind="orig" />
-          <.wave label="Mastered" peaks={@waves.mastered} kind="master" />
+
+          <div class="qm-panel qm-waves">
+            <div class="qm-panel-title">Waveform</div>
+            <div :if={@snap.file == nil} class="qm-empty">
+              No file loaded — use the Open file… button
+            </div>
+            <.wave label="Original" peaks={@waves.original} kind="orig" />
+            <.wave label="Mastered" peaks={@waves.mastered} kind="master" />
+          </div>
         </div>
 
         <div class="qm-panel qm-render">
@@ -247,9 +375,16 @@ defmodule QuickmasterWeb.HomeLive do
         <div class="qm-spinner-slot">
           <span :if={busy?(@uploads, @snap)} class="qm-spinner" aria-label="Working"></span>
         </div>
+        <button
+          class="qm-btn qm-btn-primary"
+          phx-click="open_file"
+          title="Open file via native dialog (preferred for large files)"
+        >
+          Open file…
+        </button>
         <form id="qm-upload" phx-change="validate" phx-submit="validate">
           <label class="qm-btn qm-btn-ghost" phx-drop-target={@uploads.audio.ref}>
-            Open file…
+            Import file…
             <.live_file_input upload={@uploads.audio} id="qm-input" class="qm-file-input" />
           </label>
         </form>
@@ -298,6 +433,7 @@ defmodule QuickmasterWeb.HomeLive do
       <form
         id={"num-" <> Atom.to_string(@name)}
         phx-change="param"
+        phx-value-name={@name}
         class="qm-knob-number"
       >
         <input

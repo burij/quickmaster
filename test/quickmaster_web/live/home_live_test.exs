@@ -7,12 +7,15 @@ defmodule QuickmasterWeb.HomeLiveTest do
 
   setup do
     Desktop.Auth.set_key(Base.encode32(:crypto.strong_rand_bytes(32)))
-    Session.reset()
-    :ok
+    window_id = System.unique_integer([:positive])
+    {:ok, _pid} = Quickmaster.SessionSupervisor.start_session(window_id)
+    on_exit(fn -> Quickmaster.SessionSupervisor.stop_session(window_id) end)
+    {:ok, window_id: window_id}
   end
 
-  test "shows the effect UI on an empty session", %{conn: conn} do
-    {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
+  test "shows the effect UI on an empty session", %{conn: conn, window_id: window_id} do
+    Session.reset(window_id)
+    {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}&window_id=#{window_id}")
 
     assert html =~ "Quickmaster"
     assert html =~ "Dyson compressor"
@@ -24,8 +27,9 @@ defmodule QuickmasterWeb.HomeLiveTest do
     assert render(view) =~ ~r/id="qm-save"[^>]*disabled/
   end
 
-  test "renders while an upload is in progress", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
+  test "renders while an upload is in progress", %{conn: conn, window_id: window_id} do
+    Session.reset(window_id)
+    {:ok, view, _html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}&window_id=#{window_id}")
 
     upload =
       file_input(view, "#qm-upload", :audio, [
@@ -40,7 +44,8 @@ defmodule QuickmasterWeb.HomeLiveTest do
     refute html =~ "Uploading"
   end
 
-  test "renders the compressor once a file is loaded", %{conn: conn} do
+  test "renders the compressor once a file is loaded", %{conn: conn, window_id: window_id} do
+    Session.reset(window_id)
     dir = Path.join(System.tmp_dir!(), "qm_live_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     input = Path.join(dir, "tone.wav")
@@ -54,11 +59,11 @@ defmodule QuickmasterWeb.HomeLiveTest do
 
     on_exit(fn -> File.rm_rf(dir) end)
 
-    Session.load(input, "tone.wav")
-    wait_until(fn -> Session.snapshot().status == :ready end)
-    wait_until(fn -> not Session.snapshot().stale end)
+    Session.load(window_id, input, "tone.wav")
+    wait_until(fn -> Session.snapshot(window_id).status == :ready end)
+    wait_until(fn -> not Session.snapshot(window_id).stale end)
 
-    {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}")
+    {:ok, view, html} = live(conn, ~p"/?k=#{Desktop.Auth.login_key()}&window_id=#{window_id}")
 
     assert html =~ "tone.wav"
     assert html =~ "Original · 30 s"
@@ -74,10 +79,10 @@ defmodule QuickmasterWeb.HomeLiveTest do
     assert render_hook(view, "param", %{"name" => "peak_limit", "value" => "-6"}) =~
              "Peak limit"
 
-    wait_until(fn -> Session.snapshot().params.peak_limit == -6.0 end)
+    wait_until(fn -> Session.snapshot(window_id).params.peak_limit == -6.0 end)
 
     # progress broadcasts drive the progress bar
-    snap = %{Session.snapshot() | status: :mastering, phase: :master_full}
+    snap = %{Session.snapshot(window_id) | status: :mastering, phase: :master_full}
     send(view.pid, {:session, snap})
     send(view.pid, {:progress, :master_full, 42.0})
     html = render(view)

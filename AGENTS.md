@@ -26,7 +26,7 @@ Product name, OTP app (`:quickmaster`) and module namespace
 - **Multi-window support** — independent sessions via `Quickmaster.Application.new_window/1`,
 - **Headless CLI API** — full control via `mix quickmaster.cli` with `QUICKMASTER_HEADLESS=true`,
 - **GNOME taskbar icon fix** — `StartupWMClass=QuickmasterWindow` + explicit `wxFrame.setName`,
-- **Version management** — single-sourced from `VERSION` file (0.1.1).
+- **Version management** — single-sourced from `VERSION` file (0.9.0).
 
 Open work is in **Backlog** at the bottom. The only real weak spot is DSP
 speed (see *Known limits*).
@@ -72,6 +72,8 @@ form          # nixpkgs-fmt lib.nix; mix format
   - `process_binary/2` is the hot path; `Master` uses `Dyson.step/2`.
 - `ffmpeg.ex` — `probe/1`, `decode/3` (raw f32le, `-ss` **before** `-i` for
   fast seeking), `encode/5` (same container/codec + `-map_metadata`).
+  For lossy codecs (mp3, aac, ac3, eac3, vorbis, opus, wma) the original
+  bitrate is passed via `-b:a` so quality is preserved.
   `ffmpeg/0` and `ffprobe/0` fall back to `System.find_executable/1`.
 - `master.ex` — `master_raw/6` streams an interleaved f32le file through one
   `Dyson` per channel, reporting `progress.(bytes_done, total)` per chunk;
@@ -211,8 +213,8 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 
 ### Nix Packaging (`lib.nix` / `shell.nix`)
 
-- `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`
-- `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`
+- `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`; `GTK_THEME=Adwaita:dark` set in `shellHook`
+- `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
 - `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
 - `package` — wraps release with `makeWrapper`, installs `.desktop` + icon to `$out/share/applications/` and `$out/share/icons/hicolor/256x256/apps/`
@@ -223,7 +225,7 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 Single-sourced from `VERSION` file:
 - `mix.exs`: `version: File.read!("VERSION") |> String.trim()`
 - `lib.nix`: `appVersion = builtins.readFile ./VERSION`
-- Update: `echo "0.1.2" > VERSION`
+- Update: `echo "0.9.0" > VERSION`
 
 ## Gotchas (each of these cost real debugging time)
 

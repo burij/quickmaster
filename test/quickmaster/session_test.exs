@@ -38,19 +38,32 @@ defmodule Quickmaster.SessionTest do
     {:ok, dir: dir, input: input}
   end
 
-  test "loads a file, masters it and renders a master copy", %{dir: dir, input: input} do
-    assert :ok = Session.load(input, "tone.wav")
-    wait_until(fn -> Session.snapshot().status == :ready end)
-    wait_until(fn -> not Session.snapshot().stale end)
+  # Use a unique window_id per test to avoid conflicts
+  setup do
+    # Debug: check if PubSub and SessionSupervisor are running
+    IO.puts("DEBUG: PubSub pid = " <> inspect(Process.whereis(Quickmaster.PubSub)))
+    IO.puts("DEBUG: SessionSupervisor pid = " <> inspect(Process.whereis(Quickmaster.SessionSupervisor)))
+    
+    # SessionSupervisor is started as part of the app supervision tree
+    window_id = System.unique_integer([:positive])
+    {:ok, _pid} = Quickmaster.SessionSupervisor.start_session(window_id)
+    on_exit(fn -> Quickmaster.SessionSupervisor.stop_session(window_id) end)
+    {:ok, window_id: window_id}
+  end
 
-    snap = Session.snapshot()
+  test "loads a file, masters it and renders a master copy", %{dir: dir, input: input, window_id: window_id} do
+    assert :ok = Session.load(window_id, input, "tone.wav")
+    wait_until(fn -> Session.snapshot(window_id).status == :ready end)
+    wait_until(fn -> not Session.snapshot(window_id).stale end)
+
+    snap = Session.snapshot(window_id)
     assert snap.file.name == "tone.wav"
     assert snap.file.channels == 2
     assert snap.file.sample_rate == 44_100
     assert snap.params == Session.default_params()
 
-    Session.render_to(Path.join(dir, "tone_master.wav"))
-    wait_until(fn -> Session.snapshot().output != nil end, 30_000)
+    Session.render_to(window_id, Path.join(dir, "tone_master.wav"))
+    wait_until(fn -> Session.snapshot(window_id).output != nil end, 30_000)
 
     [output] = Path.wildcard(Path.join(dir, "tone_master.wav"))
     assert {:ok, info} = FFmpeg.probe(output)
@@ -59,32 +72,32 @@ defmodule Quickmaster.SessionTest do
     assert info.tags["title"] == "T"
   end
 
-  test "load_file uses a native path without copying", %{input: input} do
-    assert :ok = Session.load_file(input)
-    wait_until(fn -> Session.snapshot().status == :ready end)
+  test "load_file uses a native path without copying", %{input: input, window_id: window_id} do
+    assert :ok = Session.load_file(window_id, input)
+    wait_until(fn -> Session.snapshot(window_id).status == :ready end)
 
-    snap = Session.snapshot()
+    snap = Session.snapshot(window_id)
     assert snap.file.name == "tone.wav"
     assert snap.file.size == File.stat!(input).size
-    wait_until(fn -> not Session.snapshot().stale end)
+    wait_until(fn -> not Session.snapshot(window_id).stale end)
   end
 
-  test "prepares the preview region before the whole file", %{input: input} do
-    Session.subscribe()
-    assert :ok = Session.load_file(input)
+  test "prepares the preview region before the whole file", %{input: input, window_id: window_id} do
+    Session.subscribe(window_id)
+    assert :ok = Session.load_file(window_id, input)
 
-    phases = collect_phases([])
+    phases = collect_phases(window_id, [])
     assert_before(phases, :decode_preview, :decode_full)
     assert_before(phases, :master_preview, :master_full)
     assert_before(phases, :decode_preview, :master_preview)
   end
 
-  test "waveforms expose the preview region for both original and master", %{input: input} do
-    assert :ok = Session.load_file(input)
-    wait_until(fn -> Session.snapshot().status == :ready end)
-    wait_until(fn -> not Session.snapshot().stale end)
+  test "waveforms expose the preview region for both original and master", %{input: input, window_id: window_id} do
+    assert :ok = Session.load_file(window_id, input)
+    wait_until(fn -> Session.snapshot(window_id).status == :ready end)
+    wait_until(fn -> not Session.snapshot(window_id).stale end)
 
-    waves = Session.waveforms()
+    waves = Session.waveforms(window_id)
     assert length(waves.original_preview) == 2
     assert waves.original_preview |> hd() |> length() > 0
     assert length(waves.mastered_preview) == 2
@@ -92,36 +105,36 @@ defmodule Quickmaster.SessionTest do
     assert waves.original_preview != waves.mastered_preview
   end
 
-  test "load_file rejects a missing path" do
-    assert {:error, :not_found} = Session.load_file("/does/not/exist.wav")
+  test "load_file rejects a missing path", %{window_id: window_id} do
+    assert {:error, :not_found} = Session.load_file(window_id, "/does/not/exist.wav")
   end
 
-  test "changing parameters marks the master stale and recomputes it", %{input: input} do
-    assert :ok = Session.load(input, "stale.wav")
-    wait_until(fn -> Session.snapshot().status == :ready end)
-    wait_until(fn -> not Session.snapshot().stale end)
+  test "changing parameters marks the master stale and recomputes it", %{input: input, window_id: window_id} do
+    assert :ok = Session.load(window_id, input, "stale.wav")
+    wait_until(fn -> Session.snapshot(window_id).status == :ready end)
+    wait_until(fn -> not Session.snapshot(window_id).stale end)
 
-    params = %{peak_limit: -6.0, release_time: 0.3, cfrate: 0.4, crate: 0.6}
-    Session.set_params(params)
+    params = %{peak_limit: -6.0, release_time: 0.3, cfrate: 0.4, crate: 0.6, pregain_enabled: true, pregain_max_db: 20.0}
+    Session.set_params(window_id, params)
 
-    wait_until(fn -> Session.snapshot().params == params and not Session.snapshot().stale end)
-    assert Session.snapshot().params == params
+    wait_until(fn -> Session.snapshot(window_id).params == params and not Session.snapshot(window_id).stale end)
+    assert Session.snapshot(window_id).params == params
   end
 
   # Collect the broadcast phases until the pipeline is finished.
-  defp collect_phases(acc) do
-    if Session.snapshot().status == :ready and not Session.snapshot().stale do
+  defp collect_phases(window_id, acc) do
+    if Session.snapshot(window_id).status == :ready and not Session.snapshot(window_id).stale do
       acc
     else
       receive do
         {:session, %{phase: phase}} when is_atom(phase) and not is_nil(phase) ->
-          collect_phases([phase | acc])
+          collect_phases(window_id, [phase | acc])
 
         {:progress, phase, _percent} ->
-          collect_phases([phase | acc])
+          collect_phases(window_id, [phase | acc])
 
         _other ->
-          collect_phases(acc)
+          collect_phases(window_id, acc)
       after
         30_000 -> flunk("timed out collecting phases, got #{inspect(Enum.reverse(acc))}")
       end

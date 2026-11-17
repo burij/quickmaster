@@ -1,6 +1,6 @@
 defmodule Quickmaster.Session do
   @moduledoc """
-  Owns the mastering workflow for the desktop app.
+  Owns the mastering workflow for a single window.
 
   Holds the opened file, the decoded PCM, the masters and the waveforms, and
   runs the work as a sequence of background tasks: decode preview → decode
@@ -8,15 +8,13 @@ defmodule Quickmaster.Session do
   happens next, which keeps the concurrent cases (parameter change during
   mastering, preview while mastering, ...) simple.
 
-  Broadcasts on the `"qm:session"` PubSub topic. `AGENTS.md` documents the
-  phase order, the state fields and the public API.
+  Broadcasts on the `"qm:session:<window_id>"` PubSub topic (per window).
   """
 
   use GenServer
 
   alias Quickmaster.Audio.{FFmpeg, Master, Player, Waveform}
 
-  @topic "qm:session"
   @debounce_ms 400
   @buckets 900
   @preview_buckets 320
@@ -25,65 +23,85 @@ defmodule Quickmaster.Session do
 
   # release_time defaults to 0.25 s: the plugin's nominal 0.0 makes the
   # release filter extrapolate and is not usable for mastering.
-  @default_params %{peak_limit: 0.0, release_time: 0.25, cfrate: 0.5, crate: 0.5}
+  # pregain_enabled default true: normalize to 0 dBFS peak before compression.
+  @default_params %{peak_limit: 0.0, release_time: 0.25, cfrate: 0.5, crate: 0.5, pregain_enabled: true, pregain_max_db: 20.0}
 
-  ## public API
+  ## public API (with window_id)
 
-  def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  def start_link(window_id) when is_integer(window_id) do
+    GenServer.start_link(__MODULE__, window_id)
+  end
 
-  @doc "Subscribe the calling process to session broadcasts."
-  def subscribe, do: Phoenix.PubSub.subscribe(Quickmaster.PubSub, @topic)
+  def start_link(opts) when is_list(opts) do
+    window_id = Keyword.fetch!(opts, :window_id)
+    GenServer.start_link(__MODULE__, window_id)
+  end
+
+  defp topic(window_id), do: "qm:session:#{window_id}"
+
+  @doc "Subscribe the calling process to session broadcasts for `window_id`."
+  def subscribe(window_id), do: Phoenix.PubSub.subscribe(Quickmaster.PubSub, topic(window_id))
 
   @doc "Current public snapshot (everything except the waveforms)."
-  def snapshot, do: GenServer.call(__MODULE__, :snapshot)
+  def snapshot(window_id), do: GenServer.call(pid_for(window_id), :snapshot)
 
   @doc "Drop the current file and go back to the empty state."
-  def reset, do: GenServer.call(__MODULE__, :reset)
+  def reset(window_id), do: GenServer.call(pid_for(window_id), :reset)
 
   @doc "Load `path` (uploaded temp file) under its original `name`."
-  def load(path, name), do: GenServer.call(__MODULE__, {:load, path, name}, 120_000)
+  def load(window_id, path, name), do: GenServer.call(pid_for(window_id), {:load, path, name}, 120_000)
 
   @doc "Load a file from a native path, without copying it."
-  def load_file(path), do: GenServer.call(__MODULE__, {:load_file, path}, 120_000)
+  def load_file(window_id, path), do: GenServer.call(pid_for(window_id), {:load_file, path}, 120_000)
 
-  def set_params(params), do: GenServer.cast(__MODULE__, {:set_params, params})
+  @doc "Open native file dialog and load selected file."
+  def open_file(window_id) do
+    case Quickmaster.FileDialog.open() do
+      nil -> {:error, :cancelled}
+      path -> load_file(window_id, path)
+    end
+  end
+
+  def set_params(window_id, params), do: GenServer.cast(pid_for(window_id), {:set_params, params})
 
   @doc "Render to a path chosen in the native save dialog."
-  def render, do: GenServer.cast(__MODULE__, {:render, :ask})
+  def render(window_id), do: GenServer.cast(pid_for(window_id), {:render, :ask})
 
   @doc "Render to an explicit path, skipping the dialog (menu and tests)."
-  def render_to(path), do: GenServer.cast(__MODULE__, {:render, path})
+  def render_to(window_id, path), do: GenServer.cast(pid_for(window_id), {:render, path})
 
   @doc "Play the 30 s preview of `:original` or `:master`."
-  def preview(source \\ :master), do: GenServer.cast(__MODULE__, {:preview, source})
+  def preview(window_id, source \\ :master), do: GenServer.cast(pid_for(window_id), {:preview, source})
 
-  def stop_preview, do: GenServer.cast(__MODULE__, :stop_preview)
+  def stop_preview(window_id), do: GenServer.cast(pid_for(window_id), :stop_preview)
 
   @doc "Current waveforms (full and preview region) for a fresh LiveView."
-  def waveforms, do: GenServer.call(__MODULE__, :waveforms)
+  def waveforms(window_id), do: GenServer.call(pid_for(window_id), :waveforms)
 
   def default_params, do: @default_params
 
   ## GenServer
 
   @impl true
-  def init(_opts), do: {:ok, blank(%{params: @default_params})}
+  def init(window_id) do
+    {:ok, blank(%{params: @default_params, window_id: window_id})}
+  end
 
   @impl true
   def handle_call(:snapshot, _from, state), do: {:reply, public(state), state}
 
   def handle_call(:reset, _from, state) do
     _ = state |> stop_task() |> stop_player()
-    state = blank(%{params: @default_params})
+    state = blank(%{params: @default_params, window_id: state.window_id})
     broadcast_session(state)
-    broadcast({:waveforms, waves(state)})
+    broadcast(state, {:waveforms, waves(state)})
     {:reply, :ok, state}
   end
 
   def handle_call(:waveforms, _from, state), do: {:reply, waves(state), state}
 
   def handle_call({:load, path, name}, _from, state) do
-    dir = work_dir()
+    dir = work_dir(state)
     File.mkdir_p!(dir)
     dest = Path.join(dir, "original" <> Path.extname(name))
     File.cp!(path, dest)
@@ -100,6 +118,7 @@ defmodule Quickmaster.Session do
 
   @impl true
   def handle_cast({:set_params, params}, state) do
+    # UI sends full params map; use it directly to avoid merge issues
     state = stop_player(%{state | params: params, error: nil})
 
     # A run with the old parameters is pointless once they changed.
@@ -146,7 +165,7 @@ defmodule Quickmaster.Session do
 
   def handle_info({:task_progress, ref, phase, done, total}, %{task: %{ref: ref}} = state) do
     percent = if total > 0, do: done / total * 100.0, else: 0.0
-    broadcast({:progress, phase, percent})
+    broadcast(state, {:progress, phase, percent})
     {:noreply, %{state | percent: percent, phase: phase}}
   end
 
@@ -165,7 +184,7 @@ defmodule Quickmaster.Session do
   end
 
   def handle_info({port, {:exit_status, _status}}, %{player: port} = state) do
-    broadcast({:playback, nil})
+    broadcast(state, {:playback, nil})
     {:noreply, %{state | player: nil}}
   end
 
@@ -209,11 +228,19 @@ defmodule Quickmaster.Session do
   defp advance(state), do: state
 
   defp mastered_current?(state) do
-    is_binary(state.mastered) and state.mastered_params == state.params
+    is_binary(state.mastered) and mastered_params_match?(state)
   end
 
   defp preview_current?(state) do
-    is_binary(state.mastered_preview) and state.preview_params == state.params
+    is_binary(state.mastered_preview) and preview_params_match?(state)
+  end
+
+  defp mastered_params_match?(state) do
+    state.mastered_params == Map.take(state.params, [:peak_limit, :release_time, :cfrate, :crate, :pregain_enabled, :pregain_max_db])
+  end
+
+  defp preview_params_match?(state) do
+    state.preview_params == Map.take(state.params, [:peak_limit, :release_time, :cfrate, :crate, :pregain_enabled, :pregain_max_db])
   end
 
   ## task results
@@ -229,7 +256,7 @@ defmodule Quickmaster.Session do
     }
 
     broadcast_session(state)
-    broadcast({:waveforms, waves(state)})
+    broadcast(state, {:waveforms, waves(state)})
     state
   end
 
@@ -239,7 +266,7 @@ defmodule Quickmaster.Session do
   defp finish(:decode_full, {:ok, raw, waveform}, state) do
     state = %{state | status: :ready, raw: raw, orig_waveform: waveform, error: nil}
     broadcast_session(state)
-    broadcast({:waveforms, waves(state)})
+    broadcast(state, {:waveforms, waves(state)})
     state
   end
 
@@ -257,7 +284,7 @@ defmodule Quickmaster.Session do
     }
 
     broadcast_session(state)
-    broadcast({:waveforms, waves(state)})
+    broadcast(state, {:waveforms, waves(state)})
     state
   end
 
@@ -275,7 +302,7 @@ defmodule Quickmaster.Session do
     }
 
     broadcast_session(state)
-    broadcast({:waveforms, waves(state)})
+    broadcast(state, {:waveforms, waves(state)})
     state
   end
 
@@ -307,7 +334,7 @@ defmodule Quickmaster.Session do
 
     case Player.play(wav) do
       {:ok, port} ->
-        broadcast({:playback, source})
+        broadcast(state, {:playback, source})
         %{state | player: port}
 
       {:error, reason} ->
@@ -472,7 +499,7 @@ defmodule Quickmaster.Session do
 
   defp stop_player(%{player: port} = state) do
     Player.stop(port)
-    broadcast({:playback, nil})
+    broadcast(state, {:playback, nil})
     %{state | player: nil}
   end
 
@@ -482,11 +509,11 @@ defmodule Quickmaster.Session do
   defp start_input(state, path, name, origin) do
     _ = state |> stop_task() |> stop_player()
 
-    dir = work_dir()
+    dir = work_dir(state)
     File.mkdir_p!(dir)
 
     state =
-      blank(%{params: @default_params})
+      blank(%{params: @default_params, window_id: state.window_id})
       |> Map.merge(%{
         status: :loading,
         work_dir: dir,
@@ -501,6 +528,7 @@ defmodule Quickmaster.Session do
     %{
       status: :empty,
       params: state.params || @default_params,
+      window_id: state.window_id,
       work_dir: nil,
       input: nil,
       info: nil,
@@ -540,9 +568,9 @@ defmodule Quickmaster.Session do
     }
   end
 
-  defp broadcast_session(state), do: broadcast({:session, public(state)})
+  defp broadcast_session(state), do: broadcast(state, {:session, public(state)})
 
-  defp broadcast(msg), do: Phoenix.PubSub.broadcast(Quickmaster.PubSub, @topic, msg)
+  defp broadcast(state, msg), do: Phoenix.PubSub.broadcast(Quickmaster.PubSub, topic(state.window_id), msg)
 
   defp public(state) do
     %{
@@ -573,8 +601,8 @@ defmodule Quickmaster.Session do
   defp reason_text(reason) when is_binary(reason), do: reason
   defp reason_text(reason), do: inspect(reason)
 
-  defp work_dir,
-    do: Path.join(System.tmp_dir!(), "quickmaster/#{System.unique_integer([:positive])}")
+  defp work_dir(state),
+    do: Path.join(System.tmp_dir!(), "quickmaster/#{state.window_id}/#{System.unique_integer([:positive])}")
 
   # Suggested save path: next to the opened file, or in the output dir for
   # uploads (where the original directory is unknown).
@@ -602,5 +630,12 @@ defmodule Quickmaster.Session do
       System.tmp_dir!(),
       &File.dir?/1
     )
+  end
+
+  defp pid_for(window_id) do
+    case Quickmaster.SessionSupervisor.session_pid(window_id) do
+      {:ok, pid} -> pid
+      :error -> raise "No session for window_id #{window_id}"
+    end
   end
 end
