@@ -90,7 +90,8 @@ let
     makeWrapper ${release}/bin/quickmaster $out/bin/quickmaster \
       --prefix PATH : ${runtimePath} \
       --set GSETTINGS_SCHEMA_DIR ${gsettingsSchemaDir} \
-      --prefix XDG_DATA_DIRS : ${xdgDataDirs}
+      --prefix XDG_DATA_DIRS : ${xdgDataDirs} \
+      --set GTK_THEME Adwaita:dark
 
     # Install desktop entry for application menu
     mkdir -p $out/share/applications
