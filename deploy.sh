@@ -10,3 +10,7 @@ git push origin 0.9.0 --force
 
 # Clear nix source cache so nix-build fetches the updated tag
 nix-store --delete /nix/store/wm984fhmjl032h1ms94g0h1fg6894rc6-source 2>/dev/null || true
+
+# After pushing, run nix-build. If it fails with a sha256 mismatch,
+# copy the "got:" hash into lib.nix (replace pkgs.lib.fakeSha256),
+# then commit, push again, and run nix-build once more.
