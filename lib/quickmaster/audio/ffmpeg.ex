@@ -20,6 +20,7 @@ defmodule Quickmaster.Audio.FFmpeg do
           bits_per_raw_sample: integer() | nil,
           bits_per_sample: integer() | nil,
           sample_fmt: String.t() | nil,
+          bit_rate: non_neg_integer() | nil,
           tags: map()
         }
 
@@ -118,6 +119,7 @@ defmodule Quickmaster.Audio.FFmpeg do
            bits_per_raw_sample: to_int(s["bits_per_raw_sample"]),
            bits_per_sample: to_int(s["bits_per_sample"]),
            sample_fmt: s["sample_fmt"],
+           bit_rate: to_int(fmt["bit_rate"]) || to_int(s["bit_rate"]),
            tags: Map.merge(fmt["tags"] || %{}, s["tags"] || %{})
          }}
     end
@@ -125,35 +127,57 @@ defmodule Quickmaster.Audio.FFmpeg do
 
   defp parse_probe(_), do: {:error, :bad_probe_output}
 
-  # Lossless integer PCM containers must keep their bit depth; for everything
-  # else let ffmpeg pick the encoder from the output extension.
   defp output_codec(out, original) do
-    if String.downcase(Path.extname(out)) in [".wav", ".wave"] do
-      bits = original_bits(original)
-      codec = if bits == :float, do: "pcm_f32le", else: "pcm_s#{bits}le"
-      ["-c:a", codec]
-    else
-      []
-    end
-  end
-
-  defp original_bits(original) do
     case probe(original) do
-      {:ok, %{sample_fmt: fmt, bits_per_raw_sample: raw, bits_per_sample: bps}} ->
-        cond do
-          fmt in ["flt", "fltp", "dbl", "dblp"] -> :float
-          is_integer(raw) and raw in [16, 24, 32] -> raw
-          is_integer(bps) and bps in [16, 24, 32] -> bps
-          true -> 16
+      {:ok, info} ->
+        ext = String.downcase(Path.extname(out))
+
+        if ext in [".wav", ".wave"] do
+          bits = case info.sample_fmt do
+            nil -> 16
+            "flt" -> :float
+            "fltp" -> :float
+            _ -> 16
+          end
+          codec = if bits == :float, do: "pcm_f32le", else: "pcm_s#{bits}le"
+          ["-c:a", codec]
+        else
+          codec_name = info.codec_name
+          bitrate = info.bit_rate
+
+          if codec_name do
+            if lossy?(codec_name) and bitrate do
+              ["-c:a", codec_name, "-b:a", to_string(bitrate)]
+            else
+              ["-c:a", codec_name]
+            end
+          else
+            []
+          end
         end
 
-      _ ->
-        16
+      {:error, _} ->
+        []
     end
   end
+
+  # Lossy codecs need an explicit bitrate, otherwise ffmpeg falls back to its
+  # default (e.g. 128k for mp3) and the master loses quality.
+  defp lossy?(nil), do: false
+  defp lossy?("mp3"), do: true
+  defp lossy?("aac"), do: true
+  defp lossy?("ac3"), do: true
+  defp lossy?("eac3"), do: true
+  defp lossy?("vorbis"), do: true
+  defp lossy?("opus"), do: true
+  defp lossy?("wma"), do: true
+  defp lossy?(_), do: false
 
   defp add_opt(args, _flag, nil), do: args
   defp add_opt(args, flag, value), do: args ++ [flag, to_string(value)]
+
+  # Keep PCM bit depth for lossless containers; everything else re-uses the
+  # original codec name, plus the original bitrate for lossy formats.
 
   defp run(exe, args) do
     case System.cmd(exe, args, stderr_to_stdout: true) do
