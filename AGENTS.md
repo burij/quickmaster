@@ -214,8 +214,9 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 ### Nix Packaging (`lib.nix` / `shell.nix`)
 
 - `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`; `GTK_THEME=Adwaita:dark` set in `shellHook`
-- `src` — `fetchFromGitHub` for tag `0.9.0` (`burij/quickmaster`); the
-  tarball carries no `deps/`, so `mixDeps` = `beamPackages.fetchMixDeps`
+- `src` — `fetchFromGitHub` for a **pinned commit** (`srcRev`) of
+  `burij/quickmaster`; a moving tag would invalidate the sha256. The
+  archive carries no `deps/`, so `mixDeps` = `beamPackages.fetchMixDeps`
   supplies the dependency tree via `mixFodDeps`
 - `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`; `GTK_THEME Adwaita:dark` set via `makeWrapper` for dark title bar
 - `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
@@ -228,8 +229,9 @@ Supports `--window <id>` / `-w <id>` for targeting specific windows.
 Single-sourced from `VERSION` file:
 - `mix.exs`: `version: File.read!("VERSION") |> String.trim()`
 - `lib.nix`: `appVersion = builtins.readFile ./VERSION`
-- Update: `echo "0.9.1" > VERSION`, then update `rev` + `sha256` (src) and
-  the `mixDeps` hash in `lib.nix`; `./deploy.sh` pushes, re-tags and builds
+- Update: `echo "0.9.1" > VERSION`, commit, push, then set `srcRev` to
+  that commit and update the `sha256` + `mixDeps` hash in `lib.nix`.
+  `./deploy.sh` pushes main, tags `srcRev` and builds
 
 ## Gotchas (each of these cost real debugging time)
 
@@ -288,7 +290,9 @@ Measured on this machine (load-dependent, treat as ballpark):
   (`fetchFromGitHub`), which has no `deps/` (gitignored), so the dependency
   tree is fetched with `beamPackages.fetchMixDeps` and passed as
   `mixFodDeps`. Without it the release build has no deps and fails with
-  `module Phoenix.Component is not loaded`.
+  `module Phoenix.Component is not loaded`. Never pin `src` to a tag: moving
+  the tag changes the archive and the sha256 check fails on a clean machine
+  (a warm local store hides this).
 - Membrane is intentionally not used: offline batch processing gains nothing
   from its streaming plugins over plain file IO.
 - **Parallel per-channel DSP was attempted but reverted** due to audio artifacts; sequential per-channel processing is stable.

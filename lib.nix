@@ -50,14 +50,16 @@ let
     '';
   };
 
-  # Builds from the GitHub release tag. The release tarball has no deps/
-  # (gitignored), so the dependency tree is fetched as a fixed-output
-  # derivation instead of relying on a local checkout.
+  # Builds from a pinned commit (never a moving tag: the hash would go stale).
+  # The source archive has no deps/ (gitignored), so the dependency tree is
+  # fetched as a fixed-output derivation instead of a local checkout.
+  srcRev = "8d2da77bd972fa7005807250d96a7eb69cbcb6e5";
+
   src = pkgs.fetchFromGitHub {
     owner = "burij";
     repo = "quickmaster";
-    rev = "0.9.0";
-    sha256 = "sha256-7ScCXzfQP1h46RNnzYtb48vU0AyRYDs2mENgqhypKbA=";
+    rev = srcRev;
+    sha256 = "sha256-/ixdPnRch3Ybgx/fd4RwqfIabCS9eFGEX7cjvXiIwGw=";
   };
 
   mixDeps = beamPackages.fetchMixDeps {
