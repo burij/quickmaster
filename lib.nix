@@ -1,5 +1,5 @@
 { pkgs ? import
-    (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-25.11")
+    (fetchTarball "https://github.com/NixOS/nixpkgs/tarball/nixos-26.05")
     { config = { }; overlays = [ ]; }
 }:
 
@@ -53,7 +53,14 @@ let
   release = beamPackages.mixRelease {
     pname = appName;
     version = appVersion;
-    src = ./.;
+    # Builds from the GitHub release tag. sha256 is a placeholder — run the
+    # build once and nix will print the correct hash.
+    src = pkgs.fetchFromGitHub {
+      owner = "burij";
+      repo = "quickmaster";
+      rev = "0.9.0";
+      sha256 = pkgs.lib.fakeSha256;
+    };
     removeCookie = false;
   };
 
@@ -79,8 +86,8 @@ let
 
   # XDG_DATA_DIRS for WebKitGTK WebProcess - must point to directories containing
   # glib-2.0/schemas/ (the schema source dirs, not the share root)
-  gtkSchemaDir = "${pkgs.gtk3}/share/gsettings-schemas/gtk+3-3.24.52";
-  desktopSchemaDir = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/gsettings-desktop-schemas-50.1";
+  gtkSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (with pkgs; [ gtk3 ]);
+  desktopSchemaDir = pkgs.lib.makeSearchPath "share/gsettings-schemas" (with pkgs; [ gsettings-desktop-schemas ]);
   xdgDataDirs = "${gtkSchemaDir}:${desktopSchemaDir}";
 
   package = pkgs.runCommand appName
