@@ -10,7 +10,7 @@ defmodule Quickmaster.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      compilers: [:phoenix_live_view] ++ Mix.compilers(),
+      compilers: Mix.compilers(),
       listeners: Mix.env() == :dev && [Phoenix.CodeReloader] || []
     ]
   end
