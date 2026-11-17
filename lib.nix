@@ -59,7 +59,7 @@ let
       owner = "burij";
       repo = "quickmaster";
       rev = "0.9.0";
-      sha256 = pkgs.lib.fakeSha256;
+      sha256 = "sha256-kEiT09CTOsYvnN8mR/Nwvg43DaFAtPyyycoxF4IujlU=";
     };
     removeCookie = false;
   };
