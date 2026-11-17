@@ -28,6 +28,7 @@ let
   shell = pkgs.mkShell {
     buildInputs = elixirEnv ++ dependencies;
     shellHook = ''
+      export GTK_THEME=Adwaita:dark
       alias run='mix run --no-halt' 
       alias repl='iex -S mix'
       alias script='elixir ./lib/script.exs'
