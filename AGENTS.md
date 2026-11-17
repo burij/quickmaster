@@ -11,16 +11,22 @@ Product name, OTP app (`:quickmaster`) and module namespace
 
 ## Status
 
-Feature-complete for the requested workflow:
+**Feature-complete for the requested workflow:**
 
-- open a file (native GTK chooser via `<input type=file>`),
+- open a file (native GTK chooser via `FileDialog.open/0` — native wxWidgets),
 - four rotary knobs + numeric inputs, defaults `0.0 / 0.25 / 0.5 / 0.5`,
+- **Pregain stage** — auto-normalize to 0 dBFS (clamped 20 dB), old-school toggle switch with amber LED,
 - original and mastered full waveforms (SVG),
 - 30 s preview region (30 % in) for original **and** master, each with its
   own play button, A/B comparable,
 - `Save` (native save dialog) writes the original container/codec and
   copies the metadata,
-- background mastering with a progress bar; preview-first phase order.
+- background mastering with a progress bar; preview-first phase order,
+- **Native open file dialog** (`FileDialog.open/0` — wxWidgets, no WebSocket copy),
+- **Multi-window support** — independent sessions via `Quickmaster.Application.new_window/1`,
+- **Headless CLI API** — full control via `mix quickmaster.cli` with `QUICKMASTER_HEADLESS=true`,
+- **GNOME taskbar icon fix** — `StartupWMClass=QuickmasterWindow` + explicit `wxFrame.setName`,
+- **Version management** — single-sourced from `VERSION` file (0.1.1).
 
 Open work is in **Backlog** at the bottom. The only real weak spot is DSP
 speed (see *Known limits*).
@@ -69,7 +75,8 @@ form          # nixpkgs-fmt lib.nix; mix format
   `ffmpeg/0` and `ffprobe/0` fall back to `System.find_executable/1`.
 - `master.ex` — `master_raw/6` streams an interleaved f32le file through one
   `Dyson` per channel, reporting `progress.(bytes_done, total)` per chunk;
-  `slice_to_wav/6` writes the preview WAV.
+  `slice_to_wav/6` writes the preview WAV. **Sequential per-channel processing** (reverted from parallel Task due to audio artifacts; performance acceptable).
+- `pregain.ex` — `scan_peaks/2`, `compute_gains/2`, `apply/3` — auto-normalize to 0 dBFS (clamped 20 dB). Two-pass: scan peaks → apply gains + Dyson in streaming fashion.
 - `waveform.ex` — `peaks/4` returns `[[{min,max}], ...]` per channel for the
   whole file or a `{from_frame, frames}` range. Direct binary scan; **do not
   replace with Nx** (see Known limits).
@@ -78,9 +85,9 @@ form          # nixpkgs-fmt lib.nix; mix format
 
 ### Session (`lib/quickmaster/session.ex`)
 
-Singleton GenServer, the only owner of state, publishing on PubSub topic
-`"qm:session"`. `advance/1` is the single decision step; one async task runs
-at a time (`spawn_monitor`, results sent as `{:task_done|:task_error, …}`).
+**Per-window Session GenServer** — managed by `Quickmaster.SessionSupervisor` (simple GenServer registry). Each window gets its own Session instance registered by `window_id`. PubSub topic is `"qm:session:#{window_id}"`.
+
+`advance/1` is the single decision step; one async task runs at a time (`spawn_monitor`, results sent as `{:task_done|:task_error, …}`).
 
 Phase order after a load (preview first so audio is available early):
 
@@ -105,16 +112,23 @@ A parameter change stops a running master, then re-runs 3 + 4 (debounced
 | `pending` | `nil | {:preview, :original | :master} | {:render, :ask | path}` |
 | `player` | mpv port or nil |
 
-API: `load/2` (uploads a temp file), `load_file/1` (native path, no copy),
-`set_params/1`, `preview/1`, `stop_preview/0`, `render/0` (save dialog),
-`render_to/1` (explicit path, used by tests), `snapshot/0`, `waveforms/0`,
-`reset/0`. Broadcasts: `{:session, snapshot}`, `{:progress, phase, pct}`,
-`{:waveforms, %{original, mastered, original_preview, mastered_preview}}`,
+API: `load/3` (uploads a temp file), `load_file/2` (native path, no copy),
+`open_file/1` (native dialog + load), `set_params/2`, `preview/2`, `stop_preview/1`,
+`render/1` (save dialog), `render_to/2` (explicit path, used by tests), `snapshot/1`,
+`waveforms/1`, `reset/1`, `default_params/0`. Broadcasts: `{:session, snapshot}`,
+`{:progress, phase, pct}`, `{:waveforms, %{original, mastered, original_preview, mastered_preview}}`,
 `{:playback, nil | :original | :master}`.
 
 Playback never waits for a master: `preview(:original)` plays as soon as
 `preview_src` exists (i.e. during `:decode_full`), `preview(:master)` only
 needs phase 3.
+
+### SessionSupervisor (`lib/quickmaster/session_supervisor.ex`)
+
+Simple GenServer registry tracking per-window Session PIDs. API:
+- `start_session(window_id)` → `{:ok, pid} | {:error, :already_started}`
+- `session_pid(window_id)` → `{:ok, pid} | {:error, :not_found}`
+- `stop_session(window_id)` → `{:ok, pid} | {:error, :not_found}`
 
 ### Web UI (`lib/quickmaster_web/`)
 
@@ -123,6 +137,11 @@ needs phase 3.
   `@param_defs` (module attributes are *not* accessible as `@params` inside
   `~H`; HEEx treats `@x` as an assign). Session broadcasts are handled in
   `handle_info/2`; progress updates are applied optimistically.
+  - `mount/3` accepts optional `window_id` param (defaults to 1)
+  - Native **Open file…** button (green primary style) → `FileDialog.open/0`
+  - **Import file…** button (ghost style) → HTML5 upload (WebSocket)
+  - Pregain toggle (old-school horizontal switch, amber LED)
+  - 4 compressor knobs + numeric inputs
 - `components/layouts/root.html.heex` — loads `phoenix.js`, `app.js`,
   `quickmaster.js` (all `defer`, in this order) and the favicon links.
 - `components/layouts.ex` / `core_components.ex` / `controllers/*` are
@@ -143,6 +162,69 @@ needs phase 3.
   `favicon.ico` is a 64 px PNG. Regenerate with
   `inkscape --export-type=png --export-filename=out.png -w 256 -h 256 priv/static/images/logo.svg`.
 
+### File Dialogs (`lib/quickmaster/file_dialog.ex`)
+
+- `save/1` — native `wxFileDialog` (Save style with overwrite prompt)
+- `open/0` — native `wxFileDialog` (Open style with file-must-exist)
+- Both use `Desktop.Platform.Helpers.with_wx_env/1` — wx APIs need the wx
+  environment in the *calling* process. Without it: `ErlangError {:wx, :unknown_env}`.
+
+### Application (`lib/quickmaster/application.ex`)
+
+- `window/0` — starts `Desktop.Window` with `id: QuickmasterWindow`
+- `new_window/1` — starts session + new native window on demand
+- `init_main_window_class/0` — sets `wxFrame.SetName(frame, "QuickmasterWindow")` for GNOME taskbar icon
+- Headless mode: `QUICKMASTER_HEADLESS=true` skips window creation
+
+### CLI (`lib/quickmaster/cli.ex` & `mix.exs`)
+
+```bash
+QUICKMASTER_HEADLESS=true mix quickmaster.cli <command>
+
+Commands:
+  load <path>           # Load audio file
+  set <param> <value>   # Set parameter (e.g., peak_limit -6.0)
+  get <param>           # Get current parameter value
+  params                # Show all parameters
+  toggle-pregain        # Toggle pregain stage
+  preview [source]      # Play preview (original|master)
+  stop-preview          # Stop playback
+  render <path>         # Render mastered file
+  status                # Show session status
+  reset                 # Reset to default parameters
+  wait-ready            # Block until mastering complete
+  test <path>           # Full test sequence
+```
+
+Supports `--window <id>` / `-w <id>` for targeting specific windows.
+
+### Static assets (`priv/static/`)
+
+- `assets/js/phoenix.js` — pristine Phoenix `Socket` client
+- `assets/js/app.js` — pristine LiveView client
+- `assets/js/quickmaster.js` — boots LiveView and defines the `Knob` hook
+  (pointer drag + arrow keys). No build step.
+- `assets/css/app.css` — styling including `.qm-btn-primary` (green) for "Open file…"
+- `images/logo.svg` — "QM" badge, used in header and as SVG favicon
+- `images/icon.png` (256 px) — window/taskbar icon
+- `favicon.ico` — 64 px PNG
+
+### Nix Packaging (`lib.nix` / `shell.nix`)
+
+- `shell` — dev env with `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`
+- `release` — `beamPackages.mixRelease` with `pname = "quickmaster"`, `version = builtins.readFile ./VERSION`
+- `runtimePath` — `ffmpeg-headless`, `mpv`, `wxwidgets_3_2`, `gtk3`
+- `xdgDataDirs` — for WebKitGTK WebProcess (renderer) to find GTK schemas
+- `package` — wraps release with `makeWrapper`, installs `.desktop` + icon to `$out/share/applications/` and `$out/share/icons/hicolor/256x256/apps/`
+- Desktop entry includes `StartupWMClass=QuickmasterWindow` for GNOME taskbar icon
+
+### Version Management
+
+Single-sourced from `VERSION` file:
+- `mix.exs`: `version: File.read!("VERSION") |> String.trim()`
+- `lib.nix`: `appVersion = builtins.readFile ./VERSION`
+- Update: `echo "0.1.2" > VERSION`
+
 ## Gotchas (each of these cost real debugging time)
 
 1. `new LiveSocket("/live", Socket, opts)` — the **second argument must be a
@@ -159,25 +241,26 @@ needs phase 3.
    widget is a drop destination and swallows the drag. Erlang's wx bindings
    expose no drop target (`wxDropTarget` is unbound), so this is not fixable
    from Elixir without patching wx. Open files via the `Open file…` button.
-5. `:array` as a ring buffer copies ~1000 words per sample; the Dyson delay
+4. `:array` as a ring buffer copies ~1000 words per sample; the Dyson delay
    line uses `:queue` instead. `min`/`max` BIFs are slower than inline `if`
    in the hot scan loops.
-6. Nx's pure-Elixir `BinaryBackend` costs ~8 µs/element (~50× slower than a
+5. Nx's pure-Elixir `BinaryBackend` costs ~8 µs/element (~50× slower than a
    BEAM loop). Nx therefore has no place in this app and the dependency was
    removed.
-7. LiveView 1.2: upload progress must be passed as
+6. LiveView 1.2: upload progress must be passed as
    `allow_upload(…, progress: &handle_progress/3)`; it is *not* a behaviour
    callback. Aggregate progress is on the entries
    (`entry.progress`), **not** on the `UploadConfig` (a `KeyError` there
    crashed the LiveView and made drops look broken).
-8. `Session` is a singleton, so `Session`-touching tests are
-   `async: false` and call `Session.reset()` in `setup`.
-9. The preview starts with a fresh Dyson state at the window, so the
+7. `Session` is per-window (singleton per window_id), so `Session`-touching
+   tests are `async: false` and call `SessionSupervisor.stop_session/1` in `on_exit`.
+8. The preview starts with a fresh Dyson state at the window, so the
    mastered preview can differ slightly from the saved file at the same
    position. This is deliberate (speed over exactness).
-10. `mount/3` must fetch `Session.waveforms/0` explicitly — waveforms are
-    only *broadcast* when they change, so a LiveView that mounts later would
-    otherwise render empty waveforms.
+9. `mount/3` must fetch `Session.waveforms/1` explicitly — waveforms are
+   only *broadcast* when they change, so a LiveView that mounts later would
+   otherwise render empty waveforms.
+10. `FileDialog.open/0` and `save/1` require `Desktop.Platform.Helpers.with_wx_env/1`.
 
 ## Known limits / measured performance
 
@@ -193,17 +276,14 @@ Measured on this machine (load-dependent, treat as ballpark):
 
 - The pure-Elixir DSP is the bottleneck. Real fixes: a NIF built from the C
   reference in `ladspa/` (~50× faster, needs `elixir_make` + nix build
-  support) or per-channel parallelism (~2×).
-- Opening a file went through a LiveView upload, so very large files are
-  copied over the loopback websocket. `Session.load_file/1` already exists
-  and is tested, so routing `Open file…` through a native wx open dialog
-  (like `FileDialog.save/1`) would remove that copy.
+  support).
 - `nix-build` produces `result/bin/quickmaster`, wrapped so `ffmpeg`, `mpv`
   and wxWidgets are on `PATH`. `mixRelease` compiles the dependency tree
   from `deps/`, so `src = ./.` must keep `deps` (a source filter that
   excluded it broke the build).
 - Membrane is intentionally not used: offline batch processing gains nothing
   from its streaming plugins over plain file IO.
+- **Parallel per-channel DSP was attempted but reverted** due to audio artifacts; sequential per-channel processing is stable.
 
 ## Tests
 
@@ -212,7 +292,7 @@ Measured on this machine (load-dependent, treat as ballpark):
 - `test/quickmaster/audio/pipeline_test.exs` — ffmpeg decode/slice/encode,
   waveform, progress, mono.
 - `test/quickmaster/session_test.exs` — load, phase order, render, preview
-  peaks, missing file.
+  peaks, missing file (uses `SessionSupervisor` for isolation).
 - `test/quickmaster_web/live/home_live_test.exs` — start screen, upload
   spinner, Save enabled/disabled, preview labels, progress labels.
 - `test/test_helper.exs` excludes `:ffmpeg` / `:mpv` tagged tests when the
@@ -240,13 +320,17 @@ other as raw f32le; `dyson_test.exs` compares the Elixir port against them.
 
 ## Backlog
 
-1. **DSP speed** (biggest win): NIF from `ladspa/` or per-channel `Task`s.
-2. Native **open** dialog to avoid the websocket copy for huge files
-   (`FileDialog.open/0` was removed again; re-add it like `save/1`, then call
-   `Session.load_file/1`).
-3. Preview-window length is a hard-coded 30 s / 30 % (`@preview_seconds`,
-   `@preview_ratio` in `Session`); expose it if users ask.
-4. `render/0` currently suggests the path next to the opened file (or
-   `~/Music` for uploads); a remembered last-used directory would be nicer.
-5. Real drag & drop would need a wxWidgets patch (`gtk_drag_dest_unset`) —
-   out of scope so far.
+1. **DSP speed** (biggest win): NIF from `ladspa/` C source (~50× faster, needs `elixir_make` + nix build support).
+2. Configurable Preview Window — currently hardcoded 30 s / 30% (`@preview_seconds`, `@preview_ratio` in `Session`); expose it if users ask.
+3. Remember Save Directory — currently suggests next to the opened file (or `~/Music` for uploads); a remembered last-used directory would be nicer.
+4. Real drag & drop would need a wxWidgets patch (`gtk_drag_dest_unset`) — out of scope so far.
+
+## User Feedback (Implemented)
+
+- ✅ Pregain stage — auto-normalize to 0 dBFS, old-school toggle with amber LED, default ON, separate box under Dyson compressor
+- ✅ GNOME taskbar icon fix — `StartupWMClass=QuickmasterWindow` + `wxFrame.SetName`
+- ✅ Multiple windows — independent sessions via `Application.new_window/1`
+- ✅ Native open dialog — `FileDialog.open/0` avoids WebSocket copy
+- ✅ CLI API & headless mode — `mix quickmaster.cli` with `QUICKMASTER_HEADLESS=true`
+- ✅ Version management — single-sourced from `VERSION` file
+- ✅ Native open button (green/primary) vs Import button (ghost)

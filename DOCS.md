@@ -34,6 +34,8 @@ This document explains how it works and, more importantly, the patterns you can 
 8. [Nix Packaging: Reproducible Builds](#nix-packaging-reproducible-builds)
 9. [Testing Strategy](#testing-strategy)
 10. [Patterns You Can Steal](#patterns-you-can-steal)
+11. [Pregain Stage (Auto-normalize to 0 dBFS)](#pregain-stage-auto-normalize-to-0-dbfs)
+12. [CLI API & Headless Mode](#cli-api--headless-mode)
 
 ---
 
@@ -519,7 +521,7 @@ shell = pkgs.mkShell {
 };
 ```
 
-Provides: `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`, `opencode`.
+Provides: `elixir`, `erlang`, `wxWidgets_3_2`, `ffmpeg-headless`, `mpv`, `inotify-tools`, `nixpkgs-fmt`, `git`, `wget`.
 
 ### Production Package
 
@@ -754,6 +756,103 @@ xdgDataDirs = "${gtk3}/share/gsettings-schemas/gtk+3-3.24.52}:${gsettings-deskto
 ```
 
 The renderer process doesn't inherit `GSETTINGS_SCHEMA_DIR`. It uses XDG. Point it at directories containing `glib-2.0/schemas/`.
+
+---
+
+---
+
+## Pregain Stage (Auto-normalize to 0 dBFS)
+
+The Pregain stage is a pre-compressor gain normalization that runs **before** the Dyson compressor. It ensures quiet tracks reach 0 dBFS peak level without excessive boosting.
+
+### Algorithm
+
+1. **Peak scan** — Full decoded audio is scanned for the absolute peak sample per channel
+2. **Gain computation** — Linear gain = `1.0 / peak`, clamped to `max_db` (default 20 dB)
+3. **Application** — Gain applied per channel during mastering pass
+
+### Parameters
+
+| Parameter | Unit | Range | Default | Description |
+|-----------|------|-------|---------|-------------|
+| `pregain_enabled` | boolean | true/false | `true` | Enable/disable pregain |
+| `pregain_max_db` | dB | 0..40 | `20.0` | Maximum gain ceiling |
+
+### Integration
+
+- Added as first pass in `Master.master_raw/6` when `pregain_enabled: true`
+- Two-pass: scan peaks → apply gains + Dyson in streaming fashion
+- Chunked processing (16,384 frames) keeps memory bounded
+- Parameter change triggers full re-master (preview → full)
+
+### UI
+
+Located in its own panel below the Dyson compressor:
+- **Old-school horizontal toggle switch** — metallic thumb, I/O labels in amber
+- **Amber LED** — glows when active
+- Label: "Auto-normalize to 0 dBFS"
+- Hint: "Clamped to 20 dB max gain"
+
+---
+
+## CLI API & Headless Mode
+
+Quickmaster provides a command-line interface for programmatic control and CI/CD integration. Works in both GUI and headless modes.
+
+### Headless Mode
+
+Set `QUICKMASTER_HEADLESS=true` to run without opening a native window:
+
+```bash
+QUICKMASTER_HEADLESS=true mix quickmaster.cli <command>
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `load <path>` | Load audio file |
+| `set <param> <value>` | Set parameter (e.g., `peak_limit -6.0`) |
+| `get <param>` | Get current parameter value |
+| `params` | Show all parameters |
+| `toggle-pregain` | Toggle pregain stage |
+| `preview [source]` | Play preview (`original` or `master`, default `master`) |
+| `stop-preview` | Stop playback |
+| `render <path>` | Render mastered file |
+| `status` | Show session status |
+| `reset` | Reset to default parameters |
+| `wait-ready` | Block until mastering complete |
+| `test <path>` | Run full test sequence (load → wait → set params → toggle pregain) |
+
+### Example: Full Test Sequence
+
+```bash
+QUICKMASTER_HEADLESS=true \
+  mix quickmaster.cli test testfiles/track.wav
+```
+
+This loads the file, waits for mastering, sets `peak_limit: -6.0`, toggles pregain off/on, and verifies all phases complete.
+
+### Programmatic Usage (Elixir)
+
+```elixir
+Quickmaster.CLI.load_file("track.wav")
+Quickmaster.CLI.wait_until_ready()
+Quickmaster.CLI.set_param(:peak_limit, -6.0)
+Quickmaster.CLI.toggle_pregain()
+Quickmaster.CLI.render("output_master.wav")
+```
+
+### Version Management
+
+Version is single-sourced from `VERSION` file:
+
+```bash
+# Update version
+echo "0.1.2" > VERSION
+```
+
+Both `mix.exs` and `lib.nix` read from this file automatically.
 
 ---
 

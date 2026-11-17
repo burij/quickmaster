@@ -6,7 +6,7 @@
 let
 
   appName = "quickmaster";
-  appVersion = "0.1";
+  appVersion = builtins.readFile ./VERSION;
 
   beamPackages = pkgs.beam27Packages;
 
@@ -19,7 +19,6 @@ let
     wget
     git
     nixpkgs-fmt
-    opencode
     wxwidgets_3_2 # wxWebView runtime used by elixir-desktop on Linux
     inotify-tools # phoenix_live_reload file watcher
     ffmpeg-headless # decode/encode any audio format
@@ -106,6 +105,7 @@ Icon=quickmaster
 Terminal=false
 Categories=AudioVideo;AudioEditing;
 StartupNotify=true
+StartupWMClass=QuickmasterWindow
 EOF
 
     # Install icon in hicolor theme (256px from priv/static/images/icon.png)
